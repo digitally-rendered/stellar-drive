@@ -1,0 +1,48 @@
+{
+  "name": "user",
+  "version": "1.0.0",
+  "description": "User account from OA3 Petstore",
+  "storage": "mongo",
+  "collection": "users",
+  "schema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "required": ["username", "email"],
+    "properties": {
+      "username": {
+        "type": "string",
+        "example": "theUser"
+      },
+      "first_name": {
+        "type": "string",
+        "example": "John"
+      },
+      "last_name": {
+        "type": "string",
+        "example": "James"
+      },
+      "email": {
+        "type": "string",
+        "format": "email",
+        "example": "john@email.com"
+      },
+      "password": {
+        "type": "string",
+        "x-stellar-sensitive": true
+      },
+      "phone": {
+        "type": "string",
+        "example": "12345"
+      },
+      "user_status": {
+        "type": "integer",
+        "description": "User status",
+        "default": 1
+      }
+    }
+  },
+  "indexes": [
+    { "fields": ["username"], "unique": true },
+    { "fields": ["email"], "unique": true }
+  ]
+}

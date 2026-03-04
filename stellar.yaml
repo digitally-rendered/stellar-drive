@@ -1,0 +1,33 @@
+project:
+  name: stellar-drive-example
+  version: "1.0.0"
+
+server:
+  port: 8080
+  host: "0.0.0.0"
+  read_timeout: 30s
+  write_timeout: 30s
+  graceful_shutdown: 15s
+  api_prefix: /api/v1
+
+schemas:
+  dir: ./schemas
+  hot_reload: false
+
+mongo:
+  uri: mongodb://localhost:27017
+  database: stellar_drive
+  max_pool_size: 100
+
+graphql:
+  enabled: false
+  path: /graphql
+
+middleware:
+  cors:
+    allowed_origins:
+      - "*"
+  security_headers: true
+  rate_limit:
+    requests_per_second: 100
+    burst: 50

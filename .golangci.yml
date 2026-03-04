@@ -1,0 +1,17 @@
+run:
+  timeout: 5m
+  go: "1.24"
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - gosimple
+
+issues:
+  exclude-dirs:
+    - generated
+  exclude-generated: strict
