@@ -77,7 +77,7 @@ func TestRemoteOPA_DictResultAllow(t *testing.T) {
 
 func TestRemoteOPA_DictResultDenyWithReason(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"result": map[string]any{
 				"allow":  false,
 				"reason": "admin role required",
@@ -96,7 +96,7 @@ func TestRemoteOPA_DictResultDenyWithReason(t *testing.T) {
 
 func TestRemoteOPA_NilResultDenies(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{})
+		_ = json.NewEncoder(w).Encode(map[string]any{})
 	}))
 	defer srv.Close()
 
@@ -111,7 +111,7 @@ func TestRemoteOPA_NilResultDenies(t *testing.T) {
 func TestRemoteOPA_DotToSlashConversion(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v1/data/app/authz/allow", r.URL.Path)
-		json.NewEncoder(w).Encode(map[string]any{"result": true})
+		_ = json.NewEncoder(w).Encode(map[string]any{"result": true})
 	}))
 	defer srv.Close()
 

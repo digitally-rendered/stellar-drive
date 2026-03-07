@@ -716,7 +716,7 @@ func db2ToInt64(v any) int64 {
 		return int64(t)
 	case string:
 		var n int64
-		fmt.Sscanf(t, "%d", &n)
+		_, _ = fmt.Sscanf(t, "%d", &n)
 		return n
 	}
 	return 0

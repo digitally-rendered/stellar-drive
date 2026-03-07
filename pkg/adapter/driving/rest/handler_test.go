@@ -107,7 +107,7 @@ func (m *mockService) BulkDelete(ctx context.Context, schemaName string, ids []s
 
 func newTestHandler(funcReg *registry.FunctionRegistry) *GenericHandler {
 	reg := schema.NewRegistry()
-	reg.Register(&schema.SchemaEnvelope{
+	_, _ = reg.Register(&schema.SchemaEnvelope{
 		Name:    "pet",
 		Version: "1.0.0",
 		Schema:  map[string]any{"type": "object"},
@@ -171,7 +171,7 @@ func TestGenericHandler_HandlerOverride(t *testing.T) {
 	funcReg := registry.NewFunctionRegistry()
 	funcReg.RegisterHandler("pet", registry.OpCreate, registry.Scope{}, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
-		w.Write([]byte(`{"custom":"override"}`))
+		_, _ = w.Write([]byte(`{"custom":"override"}`))
 	})
 
 	h := newTestHandler(funcReg)
@@ -325,7 +325,7 @@ func TestGenericHandler_Transform_MutatesData(t *testing.T) {
 	}
 
 	reg := schema.NewRegistry()
-	reg.Register(&schema.SchemaEnvelope{
+	_, _ = reg.Register(&schema.SchemaEnvelope{
 		Name:    "pet",
 		Version: "1.0.0",
 		Schema:  map[string]any{"type": "object"},
@@ -390,7 +390,7 @@ func TestGenericHandler_FullPipeline(t *testing.T) {
 	}
 
 	reg := schema.NewRegistry()
-	reg.Register(&schema.SchemaEnvelope{
+	_, _ = reg.Register(&schema.SchemaEnvelope{
 		Name:    "pet",
 		Version: "1.0.0",
 		Schema:  map[string]any{"type": "object"},

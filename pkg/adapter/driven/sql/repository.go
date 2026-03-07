@@ -331,7 +331,7 @@ func (r *SQLRepository) List(ctx context.Context, schemaName string, q *query.Qu
 	if err != nil {
 		return nil, coreerrors.Internal("failed to list documents", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	items := make([]*model.Document, 0, limit)
 	for rows.Next() {

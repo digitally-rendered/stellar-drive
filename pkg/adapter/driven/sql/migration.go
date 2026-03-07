@@ -302,7 +302,7 @@ func (m *Migrator) Status(ctx context.Context) ([]MigrationRecord, error) {
 		// an opaque driver error.
 		return nil, coreerrors.Internal("sql: Status: query _migrations: "+err.Error(), err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var records []MigrationRecord
 	for rows.Next() {
