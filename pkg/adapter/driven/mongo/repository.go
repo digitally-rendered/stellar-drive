@@ -195,7 +195,7 @@ func (r *MongoRepository) List(ctx context.Context, schemaName string, q *query.
 	if err != nil {
 		return nil, coreerrors.Internal("failed to execute list query", err)
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	// Decode the single $facet result document.
 	type countDoc struct {

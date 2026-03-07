@@ -81,7 +81,7 @@ func (s *MongoAuditStore) find(ctx context.Context, filter bson.D, limit int) ([
 	if err != nil {
 		return nil, fmt.Errorf("audit store: find: %w", err)
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	var entries []*model.AuditEntry
 	if err := cursor.All(ctx, &entries); err != nil {

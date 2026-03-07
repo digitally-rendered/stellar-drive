@@ -107,7 +107,7 @@ func (s *MongoSchemaStore) List(ctx context.Context) ([]*schema.SchemaEnvelope, 
 	if err != nil {
 		return nil, coreerrors.Internal("failed to list schemas", err)
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	var envelopes []schema.SchemaEnvelope
 	if err := cursor.All(ctx, &envelopes); err != nil {
