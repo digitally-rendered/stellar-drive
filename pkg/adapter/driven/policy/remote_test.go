@@ -165,7 +165,7 @@ func TestRemoteOPA_ConnectionError(t *testing.T) {
 
 func TestRemoteOPA_CustomHTTPClient(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"result": true})
+		_ = json.NewEncoder(w).Encode(map[string]any{"result": true})
 	}))
 	defer srv.Close()
 
@@ -205,7 +205,7 @@ func TestRemoteOPA_SubjectPassedThrough(t *testing.T) {
 		input, _ := body["input"].(map[string]any)
 		subject, _ := input["subject"].(map[string]any)
 		assert.Equal(t, "admin", subject["role"])
-		json.NewEncoder(w).Encode(map[string]any{"result": true})
+		_ = json.NewEncoder(w).Encode(map[string]any{"result": true})
 	}))
 	defer srv.Close()
 

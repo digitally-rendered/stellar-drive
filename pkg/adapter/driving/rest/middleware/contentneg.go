@@ -29,7 +29,7 @@ func ContentNegotiation() func(http.Handler) http.Handler {
 				ct := parseMediaType(r.Header.Get("Content-Type"))
 				if isYAML(ct) {
 					body, err := io.ReadAll(r.Body)
-					r.Body.Close()
+					_ = r.Body.Close()
 					if err == nil {
 						var data any
 						if err := yaml.Unmarshal(body, &data); err == nil {

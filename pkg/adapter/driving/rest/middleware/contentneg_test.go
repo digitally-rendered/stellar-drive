@@ -19,7 +19,7 @@ func echoHandler() http.Handler {
 		w.WriteHeader(http.StatusOK)
 		var buf bytes.Buffer
 		if r.Body != nil {
-			buf.ReadFrom(r.Body)
+			_, _ = buf.ReadFrom(r.Body)
 		}
 		if buf.Len() == 0 {
 			_, _ = w.Write([]byte(`{"message":"hello"}`))

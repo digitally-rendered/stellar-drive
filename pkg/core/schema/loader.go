@@ -45,7 +45,7 @@ func LoadFromFile(path string) (*SchemaEnvelope, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open schema file %q: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var envelope SchemaEnvelope
 	dec := json.NewDecoder(f)

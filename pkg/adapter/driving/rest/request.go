@@ -17,7 +17,7 @@ func DecodeBody(r *http.Request) (map[string]any, error) {
 	if r.Body == nil {
 		return nil, fmt.Errorf("request body is required")
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var data map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
@@ -33,7 +33,7 @@ func DecodeBulkBody(r *http.Request) ([]map[string]any, error) {
 	if r.Body == nil {
 		return nil, fmt.Errorf("request body is required")
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var items []map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&items); err != nil {
@@ -49,7 +49,7 @@ func DecodeBulkUpdateBody(r *http.Request) ([]model.BulkUpdateItem, error) {
 	if r.Body == nil {
 		return nil, fmt.Errorf("request body is required")
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var items []model.BulkUpdateItem
 	if err := json.NewDecoder(r.Body).Decode(&items); err != nil {
@@ -70,7 +70,7 @@ func DecodeBulkDeleteBody(r *http.Request) ([]string, error) {
 	if r.Body == nil {
 		return nil, fmt.Errorf("request body is required")
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var payload struct {
 		IDs []string `json:"ids"`

@@ -34,7 +34,7 @@ func (m *mockEvaluator) LoadPolicy(_ context.Context, _ string, _ []byte) error 
 func newPolicyTestHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"ok":true}`))
+		_, _ = w.Write([]byte(`{"ok":true}`))
 	})
 }
 
@@ -61,7 +61,7 @@ func TestPolicy_Denied(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, rr.Code)
 
 	var body map[string]any
-	json.Unmarshal(rr.Body.Bytes(), &body)
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &body))
 	errBody, _ := body["error"].(map[string]any)
 	assert.Equal(t, "FORBIDDEN", errBody["code"])
 	assert.Equal(t, "admin role required", errBody["message"])
@@ -78,7 +78,7 @@ func TestPolicy_EvaluatorError(t *testing.T) {
 	assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
 
 	var body map[string]any
-	json.Unmarshal(rr.Body.Bytes(), &body)
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &body))
 	errBody, _ := body["error"].(map[string]any)
 	assert.Equal(t, "INTERNAL", errBody["code"])
 }

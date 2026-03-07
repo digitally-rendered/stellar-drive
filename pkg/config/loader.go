@@ -32,7 +32,7 @@ func loadYAML(path string, dst *StellarConfig) error {
 	if err != nil {
 		return fmt.Errorf("open: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	dec := yaml.NewDecoder(f)
 	dec.KnownFields(true)

@@ -69,7 +69,7 @@ func (s *SchemaAPI) RegisterSchema(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, coreerrors.BadRequest("decode schema envelope: "+err.Error()))
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	if err := schema.ValidateEnvelope(&envelope); err != nil {
 		WriteError(w, coreerrors.BadRequest(err.Error()))
@@ -148,7 +148,7 @@ func (s *SchemaAPI) UpdateSchema(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, coreerrors.BadRequest("decode schema envelope: "+err.Error()))
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	// Ensure the URL name and the envelope body are consistent.
 	if envelope.Name == "" {
