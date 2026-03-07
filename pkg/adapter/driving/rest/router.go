@@ -4,6 +4,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/digitally-rendered/stellar-drive/pkg/core/container"
+	"github.com/digitally-rendered/stellar-drive/pkg/core/registry"
 	"github.com/digitally-rendered/stellar-drive/pkg/core/schema"
 	"github.com/digitally-rendered/stellar-drive/pkg/core/service"
 )
@@ -12,14 +13,16 @@ import (
 // pre-mounts CRUD routes for all schemas that are already registered.
 //
 //   - apiPrefix   — path prefix, e.g. "/api/v1"
-//   - registry    — schema registry (read at mount time; also passed to SchemaAPI)
+//   - schemaReg   — schema registry (read at mount time; also passed to SchemaAPI)
 //   - ctr         — DI container supplying services and repositories
 //   - schemaStore — optional persistent store (may be nil)
+//   - funcReg     — optional FunctionRegistry for handler overrides, guards, etc.
 func NewRouter(
 	apiPrefix string,
-	registry *schema.Registry,
+	schemaReg *schema.Registry,
 	ctr *container.Container,
 	schemaStore schema.Store,
+	funcReg *registry.FunctionRegistry,
 ) chi.Router {
 	r := chi.NewRouter()
 
@@ -27,13 +30,13 @@ func NewRouter(
 	// mount new schema routes dynamically at runtime.
 	dataRouter := chi.NewRouter()
 
-	schemaAPI := NewSchemaAPI(registry, schemaStore, ctr, dataRouter)
+	schemaAPI := NewSchemaAPI(schemaReg, schemaStore, ctr, dataRouter, funcReg)
 
 	// Mount the schema management sub-router.
 	r.Mount(apiPrefix+"/_schemas", schemaAPI.Routes())
 
 	// Pre-mount CRUD routes for schemas registered at startup.
-	MountSchemaRoutes(dataRouter, "", registry, ctr)
+	MountSchemaRoutes(dataRouter, "", schemaReg, ctr, funcReg)
 
 	// Mount the data sub-router under the API prefix.
 	r.Mount(apiPrefix, dataRouter)
@@ -49,11 +52,12 @@ func NewRouter(
 func MountSchemaRoutes(
 	router chi.Router,
 	apiPrefix string,
-	registry *schema.Registry,
+	schemaReg *schema.Registry,
 	ctr *container.Container,
+	funcReg *registry.FunctionRegistry,
 ) {
-	for _, name := range registry.Names() {
-		mountOne(router, apiPrefix, name, registry, ctr)
+	for _, name := range schemaReg.Names() {
+		mountOne(router, apiPrefix, name, schemaReg, ctr, funcReg)
 	}
 }
 
@@ -62,8 +66,9 @@ func mountOne(
 	router chi.Router,
 	apiPrefix string,
 	schemaName string,
-	registry *schema.Registry,
+	schemaReg *schema.Registry,
 	ctr *container.Container,
+	funcReg *registry.FunctionRegistry,
 ) {
 	path := apiPrefix + "/" + schemaName
 
@@ -78,9 +83,14 @@ func mountOne(
 		if repo == nil {
 			return
 		}
-		svc = service.NewGenericCRUDService(repo, ctr.EventBus(), registry)
+		svc = service.NewGenericCRUDService(repo, ctr.EventBus(), schemaReg)
 	}
 
-	handler := NewGenericHandler(schemaName, svc, registry)
+	var opts []HandlerOption
+	if funcReg != nil {
+		opts = append(opts, WithFunctionRegistry(funcReg))
+	}
+
+	handler := NewGenericHandler(schemaName, svc, schemaReg, opts...)
 	router.Mount(path, handler.Routes())
 }

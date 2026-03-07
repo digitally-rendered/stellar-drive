@@ -144,7 +144,29 @@ func (r *MongoRepository) List(ctx context.Context, schemaName string, q *query.
 		pipeline = append(pipeline, bson.D{{Key: "$sort", Value: sortDoc}})
 	}
 
-	// Step 7: $facet — count + paginated slice.
+	// Step 7: apply field projection within the data map.
+	if q != nil && len(q.Fields) > 0 {
+		projDoc := bson.D{
+			// Always include system fields.
+			{Key: "_id", Value: 1},
+			{Key: "entity_id", Value: 1},
+			{Key: "schema_name", Value: 1},
+			{Key: "record_version", Value: 1},
+			{Key: "schema_version", Value: 1},
+			{Key: "created_at", Value: 1},
+			{Key: "updated_at", Value: 1},
+			{Key: "deleted_at", Value: 1},
+			{Key: "created_by", Value: 1},
+			{Key: "updated_by", Value: 1},
+			{Key: "etag", Value: 1},
+		}
+		for _, f := range q.Fields {
+			projDoc = append(projDoc, bson.E{Key: "data." + f, Value: 1})
+		}
+		pipeline = append(pipeline, bson.D{{Key: "$project", Value: projDoc}})
+	}
+
+	// Step 8: $facet — count + paginated slice.
 	limit := 50
 	offset := 0
 	if q != nil {
@@ -346,5 +368,30 @@ func (r *MongoRepository) EnsureIndexes(ctx context.Context, schemaName string) 
 		return coreerrors.Internal("failed to ensure indexes", err)
 	}
 
+	return nil
+}
+
+// WithTransaction executes fn within a MongoDB multi-document transaction.
+// If fn returns an error the transaction is aborted; otherwise it is committed.
+// Transient errors and unknown commit results are retried automatically by the
+// driver for up to 120 seconds.
+//
+// The context passed to fn already carries the session, so any MongoDB
+// operation that uses that context will automatically participate in the
+// transaction. fn must be idempotent because the driver may call it more than
+// once during retry attempts.
+func (r *MongoRepository) WithTransaction(ctx context.Context, fn func(ctx context.Context) error) error {
+	session, err := r.conn.StartSession()
+	if err != nil {
+		return fmt.Errorf("mongo: start session: %w", err)
+	}
+	defer session.EndSession(ctx)
+
+	_, err = session.WithTransaction(ctx, func(sc context.Context) (any, error) {
+		return nil, fn(sc)
+	})
+	if err != nil {
+		return fmt.Errorf("mongo: transaction: %w", err)
+	}
 	return nil
 }

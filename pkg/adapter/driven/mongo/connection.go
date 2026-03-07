@@ -101,3 +101,12 @@ func (c *Connection) Ping(ctx context.Context) error {
 	}
 	return nil
 }
+
+// StartSession starts a new MongoDB session for transaction use.
+// The caller is responsible for calling EndSession on the returned session.
+func (c *Connection) StartSession() (*mongo.Session, error) {
+	if c.client == nil {
+		return nil, fmt.Errorf("mongo: not connected")
+	}
+	return c.client.StartSession()
+}

@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/digitally-rendered/stellar-drive/pkg/core/event"
+	"github.com/digitally-rendered/stellar-drive/pkg/core/port"
 	"github.com/digitally-rendered/stellar-drive/pkg/core/registry"
 )
 
@@ -44,5 +45,14 @@ func WithEventBus(bus *event.Bus) Option {
 func WithFunctionRegistry(reg *registry.FunctionRegistry) Option {
 	return func(e *Engine) {
 		e.funcReg = reg
+	}
+}
+
+// WithPolicyEvaluator sets a pre-configured policy evaluator. When provided,
+// the engine skips automatic evaluator construction from config. Use this to
+// inject a custom evaluator or a test double.
+func WithPolicyEvaluator(eval port.PolicyEvaluator) Option {
+	return func(e *Engine) {
+		e.policyEval = eval
 	}
 }

@@ -70,10 +70,22 @@ Focus: CLI commands (Cobra), config loading (Viper), engine lifecycle, graceful 
 ### Quality
 Focus: Table-driven tests, testcontainers integration tests, golden file tests for codegen, benchmarks, golangci-lint.
 
+## Project Layout
+
+```
+cmd/stellar-drive/    Entry point (package main)
+cmd/                  Cobra CLI commands (package cmd)
+pkg/                  Public library code
+internal/             Private utilities
+docs/                 Documentation
+schemas/              Example JSON Schema files
+```
+
 ## Commands
 
 ```bash
 make build        # go build ./...
+make install      # go build -o stellar-drive ./cmd/stellar-drive
 make test         # go test ./... -short
 make test-int     # go test ./... -tags=integration
 make lint         # golangci-lint run

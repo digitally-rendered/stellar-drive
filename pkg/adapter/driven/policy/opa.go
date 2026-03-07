@@ -1,12 +1,11 @@
-// Package policy provides access-control policy evaluation. The OPAEvaluator
-// in this file is a self-contained, rule-based evaluator that mirrors the
-// interface of Open Policy Agent without requiring the OPA runtime as a
-// dependency.
+// Package policy provides access-control policy evaluation adapters.
 //
-// Real OPA integration note: to use the embedded OPA Go library replace the
-// rule-matching logic in Evaluate with a call to rego.New(...).PrepareForEval
-// and supply the compiled Rego modules loaded via LoadPolicy. Add
-// github.com/open-policy-agent/opa to go.mod before doing so.
+// InlineEvaluator is a self-contained, rule-based evaluator that uses
+// programmatic Go functions for policy decisions. It is the Go equivalent
+// of Python slip-stream's InlinePolicy.
+//
+// RemoteOPAEvaluator (in remote.go) calls a remote OPA server via its REST
+// API for Rego-based policy evaluation.
 package policy
 
 import (
@@ -18,10 +17,9 @@ import (
 	"github.com/digitally-rendered/stellar-drive/pkg/core/port"
 )
 
-// PolicyRule is a programmatic rule used by OPAEvaluator when the full OPA
-// runtime is not available. Each rule specifies which actions and schemas it
-// covers, and an optional Condition that receives the full PolicyInput for
-// fine-grained checks.
+// PolicyRule is a programmatic rule used by InlineEvaluator. Each rule
+// specifies which actions and schemas it covers, and an optional Condition
+// that receives the full PolicyInput for fine-grained checks.
 type PolicyRule struct {
 	// Name is a unique, human-readable identifier for this rule.
 	Name string
@@ -39,42 +37,66 @@ type PolicyRule struct {
 	Condition func(input *port.PolicyInput) bool
 }
 
-// OPAEvaluator implements port.PolicyEvaluator using a set of in-memory
-// PolicyRules. It is safe for concurrent use.
+// InlineEvaluator implements port.PolicyEvaluator using a set of in-memory
+// PolicyRules. It is the Go equivalent of Python's InlinePolicy — rules are
+// registered as Go functions rather than Rego policies.
 //
-// LoadPolicy accepts opaque policy bytes whose format is intentionally
-// unspecified in this stub; a real OPA integration would parse and compile
-// Rego source here.
-type OPAEvaluator struct {
+// All methods are safe for concurrent use.
+type InlineEvaluator struct {
 	mu       sync.RWMutex
 	rules    []PolicyRule
-	policies map[string][]byte // stored but not yet interpreted in stub
+	policies map[string][]byte
 }
 
-// NewOPAEvaluator returns an empty OPAEvaluator with no rules loaded.
-func NewOPAEvaluator() *OPAEvaluator {
-	return &OPAEvaluator{
+// NewInlineEvaluator returns an empty InlineEvaluator with no rules loaded.
+func NewInlineEvaluator() *InlineEvaluator {
+	return &InlineEvaluator{
 		policies: make(map[string][]byte),
 	}
 }
 
+// OPAEvaluator is an alias for InlineEvaluator, retained for backward
+// compatibility.
+//
+// Deprecated: Use InlineEvaluator instead.
+type OPAEvaluator = InlineEvaluator
+
+// NewOPAEvaluator is an alias for NewInlineEvaluator, retained for backward
+// compatibility.
+//
+// Deprecated: Use NewInlineEvaluator instead.
+func NewOPAEvaluator() *InlineEvaluator {
+	return NewInlineEvaluator()
+}
+
 // AddRule appends a programmatic rule to the evaluator. Rules are evaluated in
 // the order they were added; the first matching rule wins.
-func (e *OPAEvaluator) AddRule(rule PolicyRule) {
+func (e *InlineEvaluator) AddRule(rule PolicyRule) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.rules = append(e.rules, rule)
 }
 
+// RegisterRule is a convenience method that constructs and appends a PolicyRule.
+// It mirrors Python's InlinePolicy.register_rule.
+func (e *InlineEvaluator) RegisterRule(name string, actions []string, schemaName string, fn func(*port.PolicyInput) bool) {
+	e.AddRule(PolicyRule{
+		Name:       name,
+		Actions:    actions,
+		SchemaName: schemaName,
+		Condition:  fn,
+	})
+}
+
 // Evaluate checks whether input.Action on input.SchemaName is allowed by any
 // loaded rule. It returns (true, "", nil) on success. When no rule permits the
 // action, it returns (false, reason, nil). A non-nil error signals an
-// evaluation fault (e.g. policy compilation failure in the real OPA path).
+// evaluation fault.
 //
 // Evaluation order:
 //  1. Rules are tested in the order added (first match wins).
 //  2. If no rule matches the action+schema, the default decision is deny.
-func (e *OPAEvaluator) Evaluate(_ context.Context, input *port.PolicyInput) (bool, string, error) {
+func (e *InlineEvaluator) Evaluate(_ context.Context, input *port.PolicyInput) (bool, string, error) {
 	e.mu.RLock()
 	rules := make([]PolicyRule, len(e.rules))
 	copy(rules, e.rules)
@@ -98,11 +120,10 @@ func (e *OPAEvaluator) Evaluate(_ context.Context, input *port.PolicyInput) (boo
 	return false, reason, nil
 }
 
-// LoadPolicy stores the named policy document. In this stub the bytes are
-// retained for future use but not interpreted. A real OPA implementation would
-// compile the Rego source and add the resulting module to an internal rego.Rego
-// instance.
-func (e *OPAEvaluator) LoadPolicy(_ context.Context, name string, policy []byte) error {
+// LoadPolicy stores the named policy document. For the InlineEvaluator the
+// bytes are retained but not interpreted — programmatic rules via AddRule or
+// RegisterRule are the primary mechanism for inline policy evaluation.
+func (e *InlineEvaluator) LoadPolicy(_ context.Context, name string, policy []byte) error {
 	if strings.TrimSpace(name) == "" {
 		return fmt.Errorf("policy: LoadPolicy: name must not be empty")
 	}

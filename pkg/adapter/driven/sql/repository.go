@@ -345,6 +345,14 @@ func (r *SQLRepository) List(ctx context.Context, schemaName string, q *query.Qu
 		return nil, coreerrors.Internal("failed to iterate document rows", err)
 	}
 
+	// Apply field projection if specified (SQL stores data as a single JSON
+	// column so projection must be applied after deserialization).
+	if q != nil && len(q.Fields) > 0 {
+		for _, doc := range items {
+			doc.Data = model.ProjectData(doc.Data, q.Fields)
+		}
+	}
+
 	hasMore := int64(offset+len(items)) < total
 
 	return &model.ListResult{

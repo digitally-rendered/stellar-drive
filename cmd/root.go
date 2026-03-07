@@ -8,7 +8,7 @@ import "github.com/spf13/cobra"
 var cfgFile string
 
 var rootCmd = &cobra.Command{
-	Use:   "stellar",
+	Use:   "stellar-drive",
 	Short: "Stellar-Drive: JSON Schema-driven backend framework",
 	Long: `Stellar-Drive turns a JSON Schema into a fully-featured CRUD REST API
 backed by versioned, append-only MongoDB persistence.

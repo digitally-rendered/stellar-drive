@@ -202,6 +202,127 @@ func makeDeleteResolver(schemaName string, svc port.Service) gql.FieldResolveFn 
 	}
 }
 
+// makeBulkCreateResolver returns a FieldResolveFn that creates multiple
+// documents in one call. The resolver expects an "inputs" argument that is a
+// list of JSON objects (map[string]any). On success it returns a map with
+// "items", "succeeded", and "failed" keys.
+func makeBulkCreateResolver(schemaName string, svc port.Service) gql.FieldResolveFn {
+	return func(p gql.ResolveParams) (any, error) {
+		rawList, ok := p.Args["inputs"].([]any)
+		if !ok {
+			return nil, fmt.Errorf("bulkCreate %s: inputs must be a list", schemaName)
+		}
+
+		inputs := make([]map[string]any, 0, len(rawList))
+		for i, elem := range rawList {
+			m, ok := elem.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("bulkCreate %s: inputs[%d] must be a JSON object", schemaName, i)
+			}
+			inputs = append(inputs, m)
+		}
+
+		docs, err := svc.BulkCreate(p.Context, schemaName, inputs)
+		if err != nil {
+			return nil, err
+		}
+
+		items := make([]any, 0, len(docs))
+		for _, doc := range docs {
+			items = append(items, flattenDocument(doc))
+		}
+
+		return map[string]any{
+			"items":     items,
+			"succeeded": len(docs),
+			"failed":    0,
+		}, nil
+	}
+}
+
+// makeBulkUpdateResolver returns a FieldResolveFn that updates multiple
+// documents in one call. The resolver expects an "items" argument that is a
+// list of JSON objects, each with an "entity_id" string and a "data" object.
+// On success it returns a map with "items", "succeeded", and "failed" keys.
+func makeBulkUpdateResolver(schemaName string, svc port.Service) gql.FieldResolveFn {
+	return func(p gql.ResolveParams) (any, error) {
+		rawList, ok := p.Args["items"].([]any)
+		if !ok {
+			return nil, fmt.Errorf("bulkUpdate %s: items must be a list", schemaName)
+		}
+
+		bulkItems := make([]model.BulkUpdateItem, 0, len(rawList))
+		for i, elem := range rawList {
+			m, ok := elem.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("bulkUpdate %s: items[%d] must be a JSON object", schemaName, i)
+			}
+
+			entityID, ok := m["entity_id"].(string)
+			if !ok || entityID == "" {
+				return nil, fmt.Errorf("bulkUpdate %s: items[%d].entity_id is required", schemaName, i)
+			}
+
+			data, ok := m["data"].(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("bulkUpdate %s: items[%d].data must be a JSON object", schemaName, i)
+			}
+
+			bulkItems = append(bulkItems, model.BulkUpdateItem{
+				EntityID: entityID,
+				Data:     data,
+			})
+		}
+
+		docs, err := svc.BulkUpdate(p.Context, schemaName, bulkItems)
+		if err != nil {
+			return nil, err
+		}
+
+		items := make([]any, 0, len(docs))
+		for _, doc := range docs {
+			items = append(items, flattenDocument(doc))
+		}
+
+		return map[string]any{
+			"items":     items,
+			"succeeded": len(docs),
+			"failed":    0,
+		}, nil
+	}
+}
+
+// makeBulkDeleteResolver returns a FieldResolveFn that soft-deletes multiple
+// documents in one call. The resolver expects an "ids" argument that is a
+// list of entity ID strings. On success it returns a map with "succeeded" and
+// "failed" keys.
+func makeBulkDeleteResolver(schemaName string, svc port.Service) gql.FieldResolveFn {
+	return func(p gql.ResolveParams) (any, error) {
+		rawList, ok := p.Args["ids"].([]any)
+		if !ok {
+			return nil, fmt.Errorf("bulkDelete %s: ids must be a list", schemaName)
+		}
+
+		ids := make([]string, 0, len(rawList))
+		for i, elem := range rawList {
+			id, ok := elem.(string)
+			if !ok || id == "" {
+				return nil, fmt.Errorf("bulkDelete %s: ids[%d] must be a non-empty string", schemaName, i)
+			}
+			ids = append(ids, id)
+		}
+
+		if err := svc.BulkDelete(p.Context, schemaName, ids); err != nil {
+			return nil, err
+		}
+
+		return map[string]any{
+			"succeeded": len(ids),
+			"failed":    0,
+		}, nil
+	}
+}
+
 // extractInputMap coerces the named argument into a map[string]any.
 // The argument can arrive as a map[string]any (from variable substitution) or
 // as a JSON string.

@@ -9,6 +9,7 @@ import (
 
 	"github.com/digitally-rendered/stellar-drive/pkg/core/container"
 	coreerrors "github.com/digitally-rendered/stellar-drive/pkg/core/errors"
+	"github.com/digitally-rendered/stellar-drive/pkg/core/registry"
 	"github.com/digitally-rendered/stellar-drive/pkg/core/schema"
 	"github.com/digitally-rendered/stellar-drive/pkg/core/service"
 )
@@ -20,21 +21,24 @@ type SchemaAPI struct {
 	registry  *schema.Registry
 	store     schema.Store        // may be nil if no external store is configured
 	container *container.Container
+	funcReg   *registry.FunctionRegistry // may be nil
 	router    chi.Router          // parent router; new schema routes are mounted here
 }
 
-// NewSchemaAPI constructs a SchemaAPI. store may be nil; router is the parent
-// chi.Router onto which dynamic schema CRUD routes will be mounted.
+// NewSchemaAPI constructs a SchemaAPI. store and funcReg may be nil; router is
+// the parent chi.Router onto which dynamic schema CRUD routes will be mounted.
 func NewSchemaAPI(
-	registry *schema.Registry,
+	reg *schema.Registry,
 	store schema.Store,
 	ctr *container.Container,
 	router chi.Router,
+	funcReg *registry.FunctionRegistry,
 ) *SchemaAPI {
 	return &SchemaAPI{
-		registry:  registry,
+		registry:  reg,
 		store:     store,
 		container: ctr,
+		funcReg:   funcReg,
 		router:    router,
 	}
 }
@@ -218,6 +222,11 @@ func (s *SchemaAPI) mountSchemaRoutes(schemaName string) {
 		svc = service.NewGenericCRUDService(repo, s.container.EventBus(), s.registry)
 	}
 
-	handler := NewGenericHandler(schemaName, svc, s.registry)
+	var opts []HandlerOption
+	if s.funcReg != nil {
+		opts = append(opts, WithFunctionRegistry(s.funcReg))
+	}
+
+	handler := NewGenericHandler(schemaName, svc, s.registry, opts...)
 	s.router.Mount("/"+schemaName, handler.Routes())
 }

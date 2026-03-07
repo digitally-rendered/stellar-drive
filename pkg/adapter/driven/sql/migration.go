@@ -2,12 +2,25 @@ package sql
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	coreerrors "github.com/digitally-rendered/stellar-drive/pkg/core/errors"
 	"github.com/digitally-rendered/stellar-drive/pkg/core/schema"
 )
+
+// MigrationRecord tracks a single applied migration in the _migrations table.
+type MigrationRecord struct {
+	Version     int       `json:"version"`
+	SchemaName  string    `json:"schema_name"`
+	Description string    `json:"description"`
+	AppliedAt   time.Time `json:"applied_at"`
+}
+
+// migrationsTable is the fixed name of the migration tracking table.
+const migrationsTable = "_migrations"
 
 // Migrator applies DDL operations (CREATE TABLE, CREATE INDEX) for a given
 // Connection and Dialect. All operations are idempotent: tables and indexes
@@ -191,6 +204,170 @@ func (m *Migrator) createIndex(ctx context.Context, schemaName string, def schem
 	if _, err := m.conn.DB().ExecContext(ctx, ddl); err != nil {
 		return coreerrors.Internal(
 			fmt.Sprintf("sql: createIndex %q: %s", idxName, err.Error()),
+			err,
+		)
+	}
+	return nil
+}
+
+// EnsureMigrationTable creates the _migrations tracking table if it does not
+// already exist. It is safe to call on every startup; the IF NOT EXISTS clause
+// makes the operation idempotent.
+func (m *Migrator) EnsureMigrationTable(ctx context.Context) error {
+	d := m.dialect
+	tbl := d.QuoteIdentifier(migrationsTable)
+
+	ddl := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+    id          %s,
+    version     INTEGER NOT NULL,
+    schema_name TEXT    NOT NULL,
+    description TEXT    NOT NULL DEFAULT '',
+    applied_at  TEXT    NOT NULL,
+    UNIQUE(schema_name, version)
+)`,
+		tbl,
+		d.AutoIncrement(),
+	)
+
+	if _, err := m.conn.DB().ExecContext(ctx, ddl); err != nil {
+		return coreerrors.Internal(
+			fmt.Sprintf("sql: EnsureMigrationTable: %s", err.Error()),
+			err,
+		)
+	}
+	return nil
+}
+
+// MigrateSchema creates the table and indexes for a single schema definition,
+// recording the migration in _migrations when it has not been applied before.
+// The operation is idempotent: calling it a second time for the same schema is
+// a no-op.
+func (m *Migrator) MigrateSchema(ctx context.Context, def *schema.SchemaDefinition) error {
+	// Check whether a record already exists for this schema.
+	applied, err := m.hasMigration(ctx, def.Name)
+	if err != nil {
+		return err
+	}
+	if applied {
+		return nil
+	}
+
+	// Create the versioned data table.
+	if err := m.CreateTable(ctx, def.Name); err != nil {
+		return err
+	}
+
+	// Apply any user-defined indexes declared in the schema.
+	if len(def.Indexes) > 0 {
+		if err := m.EnsureIndexes(ctx, def.Name, def.Indexes); err != nil {
+			return err
+		}
+	}
+
+	// Record the migration.
+	return m.recordMigration(ctx, def.Name, 1, "initial table creation")
+}
+
+// MigrateAll creates tables and indexes for every schema in reg, recording
+// each successful migration in the _migrations tracking table.
+//
+// The function is idempotent: schemas that have already been migrated are
+// skipped without error.
+func (m *Migrator) MigrateAll(ctx context.Context, reg *schema.Registry) error {
+	if err := m.EnsureMigrationTable(ctx); err != nil {
+		return err
+	}
+
+	for _, def := range reg.List() {
+		if err := m.MigrateSchema(ctx, def); err != nil {
+			return fmt.Errorf("sql: MigrateAll: schema %q: %w", def.Name, err)
+		}
+	}
+	return nil
+}
+
+// Status returns all applied migration records ordered by applied_at ascending.
+func (m *Migrator) Status(ctx context.Context) ([]MigrationRecord, error) {
+	d := m.dialect
+	tbl := d.QuoteIdentifier(migrationsTable)
+
+	q := fmt.Sprintf(
+		`SELECT version, schema_name, description, applied_at FROM %s ORDER BY applied_at ASC`,
+		tbl,
+	)
+
+	rows, err := m.conn.DB().QueryContext(ctx, q)
+	if err != nil {
+		// If the table does not exist yet, return an empty slice rather than
+		// an opaque driver error.
+		return nil, coreerrors.Internal("sql: Status: query _migrations: "+err.Error(), err)
+	}
+	defer rows.Close()
+
+	var records []MigrationRecord
+	for rows.Next() {
+		var rec MigrationRecord
+		var appliedAtStr string
+		if err := rows.Scan(&rec.Version, &rec.SchemaName, &rec.Description, &appliedAtStr); err != nil {
+			return nil, coreerrors.Internal("sql: Status: scan row: "+err.Error(), err)
+		}
+		if t, err := time.Parse(time.RFC3339Nano, appliedAtStr); err == nil {
+			rec.AppliedAt = t
+		}
+		records = append(records, rec)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, coreerrors.Internal("sql: Status: iterate rows: "+err.Error(), err)
+	}
+
+	return records, nil
+}
+
+// hasMigration reports whether a migration record already exists for the given
+// schema name (any version).
+func (m *Migrator) hasMigration(ctx context.Context, schemaName string) (bool, error) {
+	d := m.dialect
+	tbl := d.QuoteIdentifier(migrationsTable)
+
+	q := fmt.Sprintf(
+		`SELECT COUNT(*) FROM %s WHERE schema_name = %s`,
+		tbl, d.Placeholder(1),
+	)
+
+	var count int
+	err := m.conn.DB().QueryRowContext(ctx, q, schemaName).Scan(&count)
+	if err != nil {
+		// The _migrations table might not exist yet if called before
+		// EnsureMigrationTable; treat that as "not migrated".
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, coreerrors.Internal(
+			fmt.Sprintf("sql: hasMigration %q: %s", schemaName, err.Error()),
+			err,
+		)
+	}
+	return count > 0, nil
+}
+
+// recordMigration inserts a new row into the _migrations tracking table.
+func (m *Migrator) recordMigration(ctx context.Context, schemaName string, version int, description string) error {
+	d := m.dialect
+	tbl := d.QuoteIdentifier(migrationsTable)
+
+	q := fmt.Sprintf(
+		`INSERT INTO %s (version, schema_name, description, applied_at) VALUES (%s, %s, %s, %s)`,
+		tbl,
+		d.Placeholder(1),
+		d.Placeholder(2),
+		d.Placeholder(3),
+		d.Placeholder(4),
+	)
+
+	appliedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	if _, err := m.conn.DB().ExecContext(ctx, q, version, schemaName, description, appliedAt); err != nil {
+		return coreerrors.Internal(
+			fmt.Sprintf("sql: recordMigration %q: %s", schemaName, err.Error()),
 			err,
 		)
 	}
