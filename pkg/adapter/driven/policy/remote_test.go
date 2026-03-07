@@ -20,12 +20,12 @@ func TestRemoteOPA_BooleanAllow(t *testing.T) {
 		assert.Equal(t, http.MethodPost, r.Method)
 
 		var body map[string]any
-		json.NewDecoder(r.Body).Decode(&body)
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 		input, _ := body["input"].(map[string]any)
 		assert.Equal(t, "create", input["action"])
 		assert.Equal(t, "pet", input["schema_name"])
 
-		json.NewEncoder(w).Encode(map[string]any{"result": true})
+		_ = json.NewEncoder(w).Encode(map[string]any{"result": true})
 	}))
 	defer srv.Close()
 
@@ -42,7 +42,7 @@ func TestRemoteOPA_BooleanAllow(t *testing.T) {
 
 func TestRemoteOPA_BooleanDeny(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"result": false})
+		_ = json.NewEncoder(w).Encode(map[string]any{"result": false})
 	}))
 	defer srv.Close()
 
@@ -59,7 +59,7 @@ func TestRemoteOPA_BooleanDeny(t *testing.T) {
 
 func TestRemoteOPA_DictResultAllow(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"result": map[string]any{
 				"allow":  true,
 				"reason": "",
@@ -128,7 +128,7 @@ func TestRemoteOPA_DotToSlashConversion(t *testing.T) {
 func TestRemoteOPA_Non200Error(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"code":"internal_error"}`))
+		_, _ = w.Write([]byte(`{"code":"internal_error"}`))
 	}))
 	defer srv.Close()
 
@@ -141,7 +141,7 @@ func TestRemoteOPA_Non200Error(t *testing.T) {
 
 func TestRemoteOPA_MalformedJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`not json`))
+		_, _ = w.Write([]byte(`not json`))
 	}))
 	defer srv.Close()
 
@@ -201,7 +201,7 @@ func TestRemoteOPA_LoadPolicy_EmptyName(t *testing.T) {
 func TestRemoteOPA_SubjectPassedThrough(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
-		json.NewDecoder(r.Body).Decode(&body)
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 		input, _ := body["input"].(map[string]any)
 		subject, _ := input["subject"].(map[string]any)
 		assert.Equal(t, "admin", subject["role"])

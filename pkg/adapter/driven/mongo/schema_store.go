@@ -133,7 +133,7 @@ func (s *MongoSchemaStore) ListVersions(ctx context.Context, name string) ([]*sc
 	if err != nil {
 		return nil, coreerrors.Internal("failed to list schema versions", err)
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	var envelopes []schema.SchemaEnvelope
 	if err := cursor.All(ctx, &envelopes); err != nil {
@@ -186,7 +186,7 @@ func (s *MongoSchemaStore) Watch(ctx context.Context) (<-chan schema.SchemaEvent
 
 	go func() {
 		defer close(ch)
-		defer stream.Close(ctx)
+		defer func() { _ = stream.Close(ctx) }()
 
 		for stream.Next(ctx) {
 			var event changeStreamEvent
