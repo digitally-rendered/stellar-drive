@@ -1,5 +1,6 @@
 .PHONY: build test test-int test-e2e test-all lint vet generate clean coverage tidy install \
-	bench-perf bench-load bench-breaking bench-constrained bench-limits bench-compat bench-clean
+	bench-perf bench-load bench-breaking bench-constrained bench-limits bench-compat bench-clean \
+	bench-fuzz bench-stream bench-stream-e2e
 
 # Build all packages (verify compilation).
 build:
@@ -84,6 +85,26 @@ bench-limits:
 # Run compatibility tests (requires slip-stream on :8100)
 bench-compat:
 	k6 run benchmarks/k6/compat_test.js
+
+# --- Fuzz testing targets ---
+
+# Run schemathesis fuzz tests against local app (must be running on :8200)
+bench-fuzz:
+	python benchmarks/fuzz/run_fuzz.py --url http://localhost:8200/api/v1 --mode all --output benchmarks/results/fuzz-results.json
+
+# --- Stream testing targets ---
+
+# Run InMemory stream Go benchmarks
+bench-stream:
+	go test ./benchmarks/stream/ -bench=. -benchmem -count=3
+
+# Run stream e2e tests with Docker brokers
+bench-stream-e2e:
+	docker compose -f benchmarks/docker-compose.streams.yml up -d --build
+	docker compose -f benchmarks/docker-compose.streams.yml --profile test run k6-stream; \
+	status=$$?; \
+	docker compose -f benchmarks/docker-compose.streams.yml down -v; \
+	exit $$status
 
 # Clean benchmark results
 bench-clean:
