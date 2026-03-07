@@ -106,7 +106,7 @@ func marshalToXML(v any) []byte {
 func writeXMLValue(buf *bytes.Buffer, tag string, v any) {
 	switch val := v.(type) {
 	case map[string]any:
-		fmt.Fprintf(buf, "<%s>", tag)
+		_, _ = fmt.Fprintf(buf, "<%s>", tag)
 		// Sort keys for deterministic output.
 		keys := make([]string, 0, len(val))
 		for k := range val {
@@ -116,15 +116,15 @@ func writeXMLValue(buf *bytes.Buffer, tag string, v any) {
 		for _, k := range keys {
 			writeXMLValue(buf, k, val[k])
 		}
-		fmt.Fprintf(buf, "</%s>", tag)
+		_, _ = fmt.Fprintf(buf, "</%s>", tag)
 	case []any:
 		for _, item := range val {
 			writeXMLValue(buf, tag, item)
 		}
 	case nil:
-		fmt.Fprintf(buf, "<%s/>", tag)
+		_, _ = fmt.Fprintf(buf, "<%s/>", tag)
 	default:
-		fmt.Fprintf(buf, "<%s>%v</%s>", tag, val, tag)
+		_, _ = fmt.Fprintf(buf, "<%s>%v</%s>", tag, val, tag)
 	}
 }
 

@@ -127,10 +127,10 @@ func TestDeepMerge(t *testing.T) {
 			},
 		},
 		{
-			name: "base is not mutated",
-			base: map[string]any{"k": "original"},
+			name:  "base is not mutated",
+			base:  map[string]any{"k": "original"},
 			patch: map[string]any{"k": "changed"},
-			want: map[string]any{"k": "changed"},
+			want:  map[string]any{"k": "changed"},
 		},
 	}
 

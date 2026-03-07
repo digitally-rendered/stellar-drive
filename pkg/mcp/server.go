@@ -518,14 +518,14 @@ func (s *Server) toolQueryRESTAPI(_ context.Context, args map[string]any) (*Call
 	fullURL := s.baseURL + s.apiPrefix + "/" + strings.TrimPrefix(path, "/")
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("# %s %s\n", method, fullURL))
-	sb.WriteString(fmt.Sprintf("curl -X %s \\\n", method))
-	sb.WriteString(fmt.Sprintf("  '%s' \\\n", fullURL))
+	_, _ = fmt.Fprintf(&sb, "# %s %s\n", method, fullURL)
+	_, _ = fmt.Fprintf(&sb, "curl -X %s \\\n", method)
+	_, _ = fmt.Fprintf(&sb, "  '%s' \\\n", fullURL)
 	sb.WriteString("  -H 'Content-Type: application/json' \\\n")
 	sb.WriteString("  -H 'Accept: application/json'")
 
 	if body != "" {
-		sb.WriteString(fmt.Sprintf(" \\\n  -d '%s'", body))
+		_, _ = fmt.Fprintf(&sb, " \\\n  -d '%s'", body)
 	}
 	sb.WriteString("\n\n")
 
@@ -534,10 +534,10 @@ func (s *Server) toolQueryRESTAPI(_ context.Context, args map[string]any) (*Call
 	if len(parts) > 0 && s.registry.Has(parts[0]) {
 		def, _ := s.registry.Get(parts[0], "")
 		if def != nil {
-			sb.WriteString(fmt.Sprintf("# Schema: %s@%s\n", def.Name, def.Version))
-			sb.WriteString(fmt.Sprintf("# Storage: %s\n", def.Storage))
+			_, _ = fmt.Fprintf(&sb, "# Schema: %s@%s\n", def.Name, def.Version)
+			_, _ = fmt.Fprintf(&sb, "# Storage: %s\n", def.Storage)
 			if len(def.RequiredFields) > 0 {
-				sb.WriteString(fmt.Sprintf("# Required fields: %s\n", strings.Join(def.RequiredFields, ", ")))
+				_, _ = fmt.Fprintf(&sb, "# Required fields: %s\n", strings.Join(def.RequiredFields, ", "))
 			}
 		}
 	}
@@ -656,21 +656,21 @@ func (s *Server) toolValidateSchemas(_ context.Context) (*CallToolResult, error)
 	for _, def := range defs {
 		env, err := s.registry.GetEnvelope(def.Name, def.Version)
 		if err != nil {
-			sb.WriteString(fmt.Sprintf("FAIL  %s@%s: %v\n", def.Name, def.Version, err))
+			_, _ = fmt.Fprintf(&sb, "FAIL  %s@%s: %v\n", def.Name, def.Version, err)
 			failCount++
 			continue
 		}
 		if err := schema.ValidateEnvelope(env); err != nil {
-			sb.WriteString(fmt.Sprintf("FAIL  %s@%s: %v\n", def.Name, def.Version, err))
+			_, _ = fmt.Fprintf(&sb, "FAIL  %s@%s: %v\n", def.Name, def.Version, err)
 			failCount++
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("OK    %s@%s\n", def.Name, def.Version))
+		_, _ = fmt.Fprintf(&sb, "OK    %s@%s\n", def.Name, def.Version)
 		okCount++
 	}
 
-	sb.WriteString(fmt.Sprintf("\n%d OK, %d FAIL (total: %d schema(s))\n",
-		okCount, failCount, okCount+failCount))
+	_, _ = fmt.Fprintf(&sb, "\n%d OK, %d FAIL (total: %d schema(s))\n",
+		okCount, failCount, okCount+failCount)
 
 	result := &CallToolResult{
 		Content: []TextContent{{Type: "text", Text: sb.String()}},
@@ -700,7 +700,7 @@ func (s *Server) toolGenerateSDK(_ context.Context, args map[string]any) (*CallT
 	sb.WriteString("  - Typed HTTP handlers\n")
 	sb.WriteString("  - GraphQL SDL files\n")
 	sb.WriteString("  - OpenAPI 3.1 JSON spec\n")
-	sb.WriteString(fmt.Sprintf("\nGenerated files are written to: %s/\n", outputDir))
+	_, _ = fmt.Fprintf(&sb, "\nGenerated files are written to: %s/\n", outputDir)
 
 	return textResult(sb.String()), nil
 }

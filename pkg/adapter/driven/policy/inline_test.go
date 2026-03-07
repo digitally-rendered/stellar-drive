@@ -200,5 +200,5 @@ func TestInlineEvaluator_BackwardCompat(t *testing.T) {
 	assert.True(t, allowed)
 
 	// Type should be assignable.
-	var _ *OPAEvaluator = e
+	_ = e
 }
