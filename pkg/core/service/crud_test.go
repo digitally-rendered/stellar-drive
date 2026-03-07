@@ -399,12 +399,12 @@ func TestGenericCRUDService_List(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		inputQuery     *query.Query
-		busFn          func(*mockEventBus)
-		wantErr        bool
-		wantLimit      int // expected normalised limit
-		wantEvents     []event.Type
+		name       string
+		inputQuery *query.Query
+		busFn      func(*mockEventBus)
+		wantErr    bool
+		wantLimit  int // expected normalised limit
+		wantEvents []event.Type
 	}{
 		{
 			name:       "nil query is normalised to defaults",
@@ -659,10 +659,10 @@ func TestNormalizeQueryPagination(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name        string
-		input       query.Query
-		wantLimit   int
-		wantOffset  int
+		name       string
+		input      query.Query
+		wantLimit  int
+		wantOffset int
 	}{
 		{
 			name:       "zero limit set to default",

@@ -21,8 +21,8 @@ import (
 var jsonScalar = gql.NewScalar(gql.ScalarConfig{
 	Name:        "JSON",
 	Description: "An arbitrary JSON value (object, array, scalar, or null).",
-	Serialize:  func(value any) any { return value },
-	ParseValue: func(value any) any { return value },
+	Serialize:   func(value any) any { return value },
+	ParseValue:  func(value any) any { return value },
 	ParseLiteral: func(valueAST ast.Value) any {
 		return valueAST.GetValue()
 	},

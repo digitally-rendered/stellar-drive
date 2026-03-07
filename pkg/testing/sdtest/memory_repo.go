@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/digitally-rendered/stellar-drive/pkg/core/model"
 	coreerrors "github.com/digitally-rendered/stellar-drive/pkg/core/errors"
+	"github.com/digitally-rendered/stellar-drive/pkg/core/model"
 	"github.com/digitally-rendered/stellar-drive/pkg/core/query"
 )
 

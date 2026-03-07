@@ -24,14 +24,14 @@ import (
 // ---------------------------------------------------------------------------
 
 type mockService struct {
-	createFn      func(ctx context.Context, schemaName string, input map[string]any) (*model.Document, error)
-	findByIDFn    func(ctx context.Context, schemaName string, entityID string) (*model.Document, error)
-	listFn        func(ctx context.Context, schemaName string, q *query.Query) (*model.ListResult, error)
-	updateFn      func(ctx context.Context, schemaName string, entityID string, input map[string]any) (*model.Document, error)
-	deleteFn      func(ctx context.Context, schemaName string, entityID string) error
-	bulkCreateFn  func(ctx context.Context, schemaName string, inputs []map[string]any) ([]*model.Document, error)
-	bulkUpdateFn  func(ctx context.Context, schemaName string, items []model.BulkUpdateItem) ([]*model.Document, error)
-	bulkDeleteFn  func(ctx context.Context, schemaName string, ids []string) error
+	createFn     func(ctx context.Context, schemaName string, input map[string]any) (*model.Document, error)
+	findByIDFn   func(ctx context.Context, schemaName string, entityID string) (*model.Document, error)
+	listFn       func(ctx context.Context, schemaName string, q *query.Query) (*model.ListResult, error)
+	updateFn     func(ctx context.Context, schemaName string, entityID string, input map[string]any) (*model.Document, error)
+	deleteFn     func(ctx context.Context, schemaName string, entityID string) error
+	bulkCreateFn func(ctx context.Context, schemaName string, inputs []map[string]any) ([]*model.Document, error)
+	bulkUpdateFn func(ctx context.Context, schemaName string, items []model.BulkUpdateItem) ([]*model.Document, error)
+	bulkDeleteFn func(ctx context.Context, schemaName string, ids []string) error
 }
 
 func (m *mockService) Create(ctx context.Context, schemaName string, input map[string]any) (*model.Document, error) {

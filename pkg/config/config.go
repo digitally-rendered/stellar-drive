@@ -71,13 +71,13 @@ type JWTConfig struct {
 
 // MiddlewareConfig groups optional HTTP middleware settings.
 type MiddlewareConfig struct {
-	RateLimit            RateLimitConfig       `yaml:"rate_limit"            json:"rate_limit"`
-	CORS                 CORSConfig            `yaml:"cors"                  json:"cors"`
-	SecurityHeaders      bool                  `yaml:"security_headers"      json:"security_headers"`
-	SecurityHeadersOpts  SecurityHeadersConfig `yaml:"security_headers_opts" json:"security_headers_opts"`
-	ContentNegotiation   bool                  `yaml:"content_negotiation"   json:"content_negotiation"`
-	ETag                 bool                  `yaml:"etag"                  json:"etag"`
-	Cache                CacheConfig           `yaml:"cache"                 json:"cache"`
+	RateLimit           RateLimitConfig       `yaml:"rate_limit"            json:"rate_limit"`
+	CORS                CORSConfig            `yaml:"cors"                  json:"cors"`
+	SecurityHeaders     bool                  `yaml:"security_headers"      json:"security_headers"`
+	SecurityHeadersOpts SecurityHeadersConfig `yaml:"security_headers_opts" json:"security_headers_opts"`
+	ContentNegotiation  bool                  `yaml:"content_negotiation"   json:"content_negotiation"`
+	ETag                bool                  `yaml:"etag"                  json:"etag"`
+	Cache               CacheConfig           `yaml:"cache"                 json:"cache"`
 }
 
 // SecurityHeadersConfig provides fine-grained control over the security

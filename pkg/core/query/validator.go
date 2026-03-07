@@ -183,4 +183,3 @@ func buildFieldIndex(def *schema.SchemaDefinition) map[string]schema.FieldDefini
 	}
 	return idx
 }
-

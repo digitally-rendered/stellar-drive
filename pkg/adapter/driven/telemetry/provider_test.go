@@ -21,9 +21,9 @@ func TestProvider_IncrCounter(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		ops     []int64 // sequence of delta values to apply
-		want    int64
+		name string
+		ops  []int64 // sequence of delta values to apply
+		want int64
 	}{
 		{
 			name: "single increment",
@@ -149,18 +149,18 @@ func TestProvider_RecordDuration(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name          string
-		observations  []time.Duration
-		wantCount     int64
-		wantMinAtMost time.Duration // min <= this
+		name           string
+		observations   []time.Duration
+		wantCount      int64
+		wantMinAtMost  time.Duration // min <= this
 		wantMaxAtLeast time.Duration // max >= this
-		wantP50Pos    bool          // P50 > 0
+		wantP50Pos     bool          // P50 > 0
 	}{
 		{
-			name:          "single observation",
-			observations:  []time.Duration{10 * time.Millisecond},
-			wantCount:     1,
-			wantMinAtMost: 10 * time.Millisecond,
+			name:           "single observation",
+			observations:   []time.Duration{10 * time.Millisecond},
+			wantCount:      1,
+			wantMinAtMost:  10 * time.Millisecond,
 			wantMaxAtLeast: 10 * time.Millisecond,
 		},
 		{
@@ -170,10 +170,10 @@ func TestProvider_RecordDuration(t *testing.T) {
 				50 * time.Millisecond,
 				100 * time.Millisecond,
 			},
-			wantCount:     3,
-			wantMinAtMost: 1 * time.Millisecond,
+			wantCount:      3,
+			wantMinAtMost:  1 * time.Millisecond,
 			wantMaxAtLeast: 100 * time.Millisecond,
-			wantP50Pos:    true,
+			wantP50Pos:     true,
 		},
 		{
 			name: "many observations populate percentiles",
@@ -184,10 +184,10 @@ func TestProvider_RecordDuration(t *testing.T) {
 				}
 				return ds
 			}(),
-			wantCount:     200,
-			wantMinAtMost: time.Millisecond,
+			wantCount:      200,
+			wantMinAtMost:  time.Millisecond,
 			wantMaxAtLeast: 200 * time.Millisecond,
-			wantP50Pos:    true,
+			wantP50Pos:     true,
 		},
 	}
 

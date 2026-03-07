@@ -51,8 +51,8 @@ func multiRegistry(t *testing.T) *schema.Registry {
 	reg := schema.NewRegistry()
 
 	schemas := []struct {
-		name    string
-		env     *schema.SchemaEnvelope
+		name string
+		env  *schema.SchemaEnvelope
 	}{
 		{
 			name: "order",

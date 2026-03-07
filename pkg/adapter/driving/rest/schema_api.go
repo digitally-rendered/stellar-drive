@@ -19,10 +19,10 @@ import (
 // SchemaEnvelope), never in the URL path.
 type SchemaAPI struct {
 	registry  *schema.Registry
-	store     schema.Store        // may be nil if no external store is configured
+	store     schema.Store // may be nil if no external store is configured
 	container *container.Container
 	funcReg   *registry.FunctionRegistry // may be nil
-	router    chi.Router          // parent router; new schema routes are mounted here
+	router    chi.Router                 // parent router; new schema routes are mounted here
 }
 
 // NewSchemaAPI constructs a SchemaAPI. store and funcReg may be nil; router is

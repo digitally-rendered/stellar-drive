@@ -14,8 +14,8 @@ import (
 type Registry struct {
 	mu        sync.RWMutex
 	schemas   map[string]map[string]*SchemaDefinition // name -> version -> definition
-	latest    map[string]string                        // name -> latest version
-	envelopes map[string]map[string]*SchemaEnvelope    // name -> version -> envelope
+	latest    map[string]string                       // name -> latest version
+	envelopes map[string]map[string]*SchemaEnvelope   // name -> version -> envelope
 }
 
 // NewRegistry constructs an empty Registry.

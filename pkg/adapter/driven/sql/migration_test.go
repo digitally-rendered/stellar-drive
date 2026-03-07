@@ -40,7 +40,7 @@ func init() {
 // ---------------------------------------------------------------------------
 
 var (
-	db2sMu    sync.Mutex
+	db2sMu     sync.Mutex
 	databases2 = map[string]*memdb2Database{}
 )
 

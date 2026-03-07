@@ -16,10 +16,10 @@ import (
 
 // mockEvaluator implements port.PolicyEvaluator for testing.
 type mockEvaluator struct {
-	allowed    bool
-	reason     string
-	err        error
-	lastInput  *port.PolicyInput
+	allowed   bool
+	reason    string
+	err       error
+	lastInput *port.PolicyInput
 }
 
 func (m *mockEvaluator) Evaluate(_ context.Context, input *port.PolicyInput) (bool, string, error) {

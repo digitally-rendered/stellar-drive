@@ -174,7 +174,7 @@ type memStmt struct {
 	q    string
 }
 
-func (s *memStmt) Close() error { return nil }
+func (s *memStmt) Close() error  { return nil }
 func (s *memStmt) NumInput() int { return -1 }
 
 func (s *memStmt) Exec(args []driver.Value) (driver.Result, error) {

@@ -238,7 +238,7 @@ func TestCache_XCacheHeader(t *testing.T) {
 	handler := mw(upstream)
 
 	tests := []struct {
-		name      string
+		name       string
 		wantXCache string
 	}{
 		{"first request — miss", "MISS"},
@@ -258,9 +258,9 @@ func TestCache_XCacheHeader(t *testing.T) {
 
 func TestCache_CacheControlHeader(t *testing.T) {
 	tests := []struct {
-		name        string
-		ttl         time.Duration
-		wantMaxAge  string
+		name       string
+		ttl        time.Duration
+		wantMaxAge string
 	}{
 		{"default TTL (60s)", 60 * time.Second, "max-age=60"},
 		{"custom TTL (120s)", 120 * time.Second, "max-age=120"},
