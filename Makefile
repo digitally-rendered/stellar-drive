@@ -1,4 +1,5 @@
-.PHONY: build test test-int test-e2e test-all lint vet generate clean coverage tidy install
+.PHONY: build test test-int test-e2e test-all lint vet generate clean coverage tidy install \
+	bench-perf bench-load bench-breaking bench-constrained bench-limits bench-compat bench-clean
 
 # Build all packages (verify compilation).
 build:
@@ -49,3 +50,41 @@ coverage:
 # Tidy go.mod and go.sum.
 tidy:
 	go mod tidy
+
+# --- Benchmark targets ---
+
+# Run perf baseline against local MongoDB (native)
+bench-perf:
+	./benchmarks/measure.sh --app stellar-drive --port 8200 --scenario smoke
+
+# Run perf load test against local MongoDB (native)
+bench-load:
+	./benchmarks/measure.sh --app stellar-drive --port 8200 --scenario load
+
+# Run stress test (ramp to failure)
+bench-breaking:
+	./benchmarks/measure.sh --app stellar-drive --port 8200 --scenario breaking
+
+# Run constrained stress test (Docker-based resource limits)
+bench-constrained:
+	docker compose -f benchmarks/docker-compose.yml up -d
+	docker compose -f benchmarks/docker-compose.yml --profile test run \
+		-e K6_SCENARIO=breaking k6-perf
+	docker compose -f benchmarks/docker-compose.yml down -v
+
+# Run perf test with specific CPU/MEM limits (Docker)
+# Usage: make bench-limits STELLAR_CPU=0.5 STELLAR_MEM=128m
+bench-limits:
+	STELLAR_CPU=$(STELLAR_CPU) STELLAR_MEM=$(STELLAR_MEM) \
+	docker compose -f benchmarks/docker-compose.yml up -d
+	docker compose -f benchmarks/docker-compose.yml --profile test run \
+		-e K6_SCENARIO=$(or $(K6_SCENARIO),load) k6-perf
+	docker compose -f benchmarks/docker-compose.yml down -v
+
+# Run compatibility tests (requires slip-stream on :8100)
+bench-compat:
+	k6 run benchmarks/k6/compat_test.js
+
+# Clean benchmark results
+bench-clean:
+	rm -f benchmarks/results/*.json
