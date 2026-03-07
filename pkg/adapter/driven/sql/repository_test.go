@@ -396,7 +396,7 @@ func execCount(db *memDatabase, q string, args []any) (driver.Rows, error) {
 	// Count the rows.
 	count := int64(0)
 	mr := rows.(*memRows)
-	for _, _ = range mr.rows {
+	for range mr.rows {
 		count++
 	}
 	return singleValueRows(count), nil
