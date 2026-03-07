@@ -25,7 +25,6 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
@@ -50,7 +49,7 @@ func init() {
 }
 
 // memDriver is the top-level driver.Driver implementation.
-type memDriver struct{ mu sync.Mutex }
+type memDriver struct{}
 
 // databases is a package-level registry of in-memory databases keyed by DSN.
 var (
@@ -1200,13 +1199,3 @@ func TestSQLRepository_ImplementsInterface(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Marshalling helpers (used by tests only)
-// ---------------------------------------------------------------------------
-
-func mustMarshal(v any) string {
-	b, err := json.Marshal(v)
-	if err != nil {
-		panic(err)
-	}
-	return string(b)
-}

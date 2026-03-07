@@ -154,13 +154,6 @@ func (c *lruCache) invalidatePrefix(prefix string) {
 	}
 }
 
-// len returns the current number of entries in the cache.
-func (c *lruCache) len() int {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.order.Len()
-}
-
 // responseRecorder wraps http.ResponseWriter and buffers the response so the
 // Cache middleware can inspect the status and body before storing them.
 type responseRecorder struct {
