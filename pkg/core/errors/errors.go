@@ -133,6 +133,15 @@ func BadRequest(message string) *DomainError {
 	}
 }
 
+// PreconditionFailed returns a DomainError for conditional request failures
+// where the If-Match ETag does not match the current resource version.
+func PreconditionFailed(message string) *DomainError {
+	return &DomainError{
+		Code:    CodePreconditionFailed,
+		Message: message,
+	}
+}
+
 // SchemaNotFound returns a DomainError indicating that a JSON Schema with the
 // given name is not registered.
 func SchemaNotFound(name string) *DomainError {

@@ -21,8 +21,8 @@ import (
 var jsonScalar = gql.NewScalar(gql.ScalarConfig{
 	Name:        "JSON",
 	Description: "An arbitrary JSON value (object, array, scalar, or null).",
-	Serialize:  func(value any) any { return value },
-	ParseValue: func(value any) any { return value },
+	Serialize:   func(value any) any { return value },
+	ParseValue:  func(value any) any { return value },
 	ParseLiteral: func(valueAST ast.Value) any {
 		return valueAST.GetValue()
 	},
@@ -43,6 +43,46 @@ var deleteResultType = gql.NewObject(gql.ObjectConfig{
 		},
 	},
 })
+
+// bulkDeleteResultType is the shared return type for all bulkDelete mutations.
+var bulkDeleteResultType = gql.NewObject(gql.ObjectConfig{
+	Name:        "BulkDeleteResult",
+	Description: "Result of a bulk soft-delete mutation.",
+	Fields: gql.Fields{
+		"succeeded": &gql.Field{
+			Type:        gql.NewNonNull(gql.Int),
+			Description: "Number of records successfully deleted.",
+		},
+		"failed": &gql.Field{
+			Type:        gql.NewNonNull(gql.Int),
+			Description: "Number of records that could not be deleted.",
+		},
+	},
+})
+
+// bulkResultType returns a per-schema result type for bulkCreate and
+// bulkUpdate mutations. It carries the written items alongside counters so
+// callers can inspect partial failures without a second round-trip.
+func bulkResultType(name string, nodeType *gql.Object) *gql.Object {
+	return gql.NewObject(gql.ObjectConfig{
+		Name:        name + "BulkResult",
+		Description: "Result of a bulk write mutation for " + name + ".",
+		Fields: gql.Fields{
+			"items": &gql.Field{
+				Type:        gql.NewList(gql.NewNonNull(nodeType)),
+				Description: "Documents that were successfully written, in input order.",
+			},
+			"succeeded": &gql.Field{
+				Type:        gql.NewNonNull(gql.Int),
+				Description: "Number of records successfully written.",
+			},
+			"failed": &gql.Field{
+				Type:        gql.NewNonNull(gql.Int),
+				Description: "Number of records that could not be written.",
+			},
+		},
+	})
+}
 
 // auditFields returns the common audit gql.Fields that are appended to every
 // generated object type. They map directly to model.Document system fields.
@@ -213,6 +253,11 @@ func BuildSchema(registry *schemapkg.Registry, ctr *container.Container) (gql.Sc
 	// BuildSchema call.
 	typeRegistry := make(map[string]gql.Output)
 
+	// objectTypes collects the generated *gql.Object per schema name so that
+	// buildSubscriptionFields can reference the same type instances without
+	// rebuilding them (GraphQL forbids duplicate named types in a schema).
+	objectTypes := make(map[string]*gql.Object)
+
 	for _, def := range defs {
 		svc := ctr.ResolveService(def.Name)
 		if svc == nil {
@@ -221,6 +266,7 @@ func BuildSchema(registry *schemapkg.Registry, ctr *container.Container) (gql.Sc
 		}
 
 		objectType := buildObjectType(def, typeRegistry)
+		objectTypes[def.Name] = objectType
 		connType := ConnectionType(toPascalCase(def.Name), objectType)
 		listType := listResultType(toPascalCase(def.Name), objectType)
 
@@ -310,6 +356,46 @@ func BuildSchema(registry *schemapkg.Registry, ctr *container.Container) (gql.Sc
 			},
 			Resolve: makeDeleteResolver(def.Name, svc),
 		}
+
+		// ---- Bulk mutation fields ----------------------------------------
+
+		bulkType := bulkResultType(pascal, objectType)
+
+		mutationFields["bulkCreate"+pascal] = &gql.Field{
+			Type:        bulkType,
+			Description: "Create multiple " + def.Name + " records in a single operation.",
+			Args: gql.FieldConfigArgument{
+				"inputs": &gql.ArgumentConfig{
+					Type:        gql.NewNonNull(gql.NewList(gql.NewNonNull(jsonScalar))),
+					Description: "Array of field-value maps for the new records.",
+				},
+			},
+			Resolve: makeBulkCreateResolver(def.Name, svc),
+		}
+
+		mutationFields["bulkUpdate"+pascal] = &gql.Field{
+			Type:        bulkType,
+			Description: "Update multiple " + def.Name + " records in a single operation.",
+			Args: gql.FieldConfigArgument{
+				"items": &gql.ArgumentConfig{
+					Type:        gql.NewNonNull(gql.NewList(gql.NewNonNull(jsonScalar))),
+					Description: "Array of objects, each with entity_id (ID) and data (JSON) keys.",
+				},
+			},
+			Resolve: makeBulkUpdateResolver(def.Name, svc),
+		}
+
+		mutationFields["bulkDelete"+pascal] = &gql.Field{
+			Type:        bulkDeleteResultType,
+			Description: "Soft-delete multiple " + def.Name + " records in a single operation.",
+			Args: gql.FieldConfigArgument{
+				"ids": &gql.ArgumentConfig{
+					Type:        gql.NewNonNull(gql.NewList(gql.NewNonNull(gql.ID))),
+					Description: "Entity IDs of the records to delete.",
+				},
+			},
+			Resolve: makeBulkDeleteResolver(def.Name, svc),
+		}
 	}
 
 	if len(queryFields) == 0 {
@@ -329,6 +415,18 @@ func BuildSchema(registry *schemapkg.Registry, ctr *container.Container) (gql.Sc
 		schemaConfig.Mutation = gql.NewObject(gql.ObjectConfig{
 			Name:   "Mutation",
 			Fields: mutationFields,
+		})
+	}
+
+	// Build subscription fields if the container has an event bus. Each
+	// registered schema gets three fields: on{Name}Created, on{Name}Updated,
+	// on{Name}Deleted. buildSubscriptionFields is a no-op when bus is nil.
+	subscriptionFields := buildSubscriptionFields(defs, objectTypes, ctr.EventBus())
+	if len(subscriptionFields) > 0 {
+		schemaConfig.Subscription = gql.NewObject(gql.ObjectConfig{
+			Name:        "Subscription",
+			Description: "Real-time document lifecycle events via the stellar-drive event bus.",
+			Fields:      subscriptionFields,
 		})
 	}
 

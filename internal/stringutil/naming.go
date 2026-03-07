@@ -87,10 +87,8 @@ func ToCamelCase(s string) string {
 //	ToKebabCase("first_name") // "first-name"
 //	ToKebabCase("HTTPStatus") // "http-status"
 func ToKebabCase(s string) string {
-	// First normalise to snake_case, then swap underscores for hyphens.
-	snake := ToSnakeCase(strings.ReplaceAll(s, "_", "X_")) // preserve existing underscores
-	// The approach above is fragile; instead handle both forms directly.
-	snake = toSnakeFromAny(s)
+	// Normalise to snake_case, then swap underscores for hyphens.
+	snake := toSnakeFromAny(s)
 	return strings.ReplaceAll(snake, "_", "-")
 }
 

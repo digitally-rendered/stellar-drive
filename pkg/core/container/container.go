@@ -17,10 +17,10 @@ import (
 //
 // All methods are safe for concurrent use after construction.
 type Container struct {
-	mu             sync.RWMutex
-	repositories   map[string]port.Repository
-	services       map[string]port.Service
-	handlers       map[string]http.Handler // schema -> custom HTTP handler
+	mu           sync.RWMutex
+	repositories map[string]port.Repository
+	services     map[string]port.Service
+	handlers     map[string]http.Handler // schema -> custom HTTP handler
 
 	defaultRepo    port.Repository
 	defaultService port.Service

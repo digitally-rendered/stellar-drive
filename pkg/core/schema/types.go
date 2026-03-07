@@ -40,17 +40,17 @@ type SchemaDefinition struct {
 
 // FieldDefinition describes a single field parsed from a JSON Schema property.
 type FieldDefinition struct {
-	Name        string           // property name
-	JSONType    string           // "string", "number", "integer", "boolean", "array", "object"
-	GoType      string           // resolved Go type
-	Format      string           // "date-time", "email", "uri", etc.
-	Required    bool
-	Default     any
-	Enum        []any
-	Ref         string            // $ref target
-	Items       *FieldDefinition  // for arrays
-	Properties  []FieldDefinition // for nested objects
-	Extensions  map[string]any    // x-stellar-* extensions
+	Name       string // property name
+	JSONType   string // "string", "number", "integer", "boolean", "array", "object"
+	GoType     string // resolved Go type
+	Format     string // "date-time", "email", "uri", etc.
+	Required   bool
+	Default    any
+	Enum       []any
+	Ref        string            // $ref target
+	Items      *FieldDefinition  // for arrays
+	Properties []FieldDefinition // for nested objects
+	Extensions map[string]any    // x-stellar-* extensions
 }
 
 // ModelVariant describes which variant of the model is being generated.

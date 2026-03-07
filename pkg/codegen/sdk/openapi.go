@@ -12,10 +12,10 @@ import (
 
 // OpenAPISpec is the top-level OpenAPI 3.1 document.
 type OpenAPISpec struct {
-	OpenAPI    string                       `json:"openapi"`
-	Info       OpenAPIInfo                  `json:"info"`
-	Paths      map[string]OpenAPIPathItem   `json:"paths"`
-	Components OpenAPIComponents            `json:"components"`
+	OpenAPI    string                     `json:"openapi"`
+	Info       OpenAPIInfo                `json:"info"`
+	Paths      map[string]OpenAPIPathItem `json:"paths"`
+	Components OpenAPIComponents          `json:"components"`
 }
 
 // OpenAPIInfo holds metadata about the API.
@@ -29,26 +29,26 @@ type OpenAPIPathItem map[string]*OpenAPIOperation
 
 // OpenAPIOperation describes a single HTTP operation.
 type OpenAPIOperation struct {
-	Summary     string                      `json:"summary"`
-	OperationID string                      `json:"operationId"`
-	Tags        []string                    `json:"tags"`
-	Parameters  []OpenAPIParameter          `json:"parameters,omitempty"`
-	RequestBody *OpenAPIRequestBody         `json:"requestBody,omitempty"`
-	Responses   map[string]OpenAPIResponse  `json:"responses"`
+	Summary     string                     `json:"summary"`
+	OperationID string                     `json:"operationId"`
+	Tags        []string                   `json:"tags"`
+	Parameters  []OpenAPIParameter         `json:"parameters,omitempty"`
+	RequestBody *OpenAPIRequestBody        `json:"requestBody,omitempty"`
+	Responses   map[string]OpenAPIResponse `json:"responses"`
 }
 
 // OpenAPIParameter describes a path, query, or header parameter.
 type OpenAPIParameter struct {
-	Name     string         `json:"name"`
-	In       string         `json:"in"`
-	Required bool           `json:"required"`
-	Schema   OpenAPISchema  `json:"schema"`
+	Name     string        `json:"name"`
+	In       string        `json:"in"`
+	Required bool          `json:"required"`
+	Schema   OpenAPISchema `json:"schema"`
 }
 
 // OpenAPIRequestBody describes the body of a mutating request.
 type OpenAPIRequestBody struct {
-	Required bool                             `json:"required"`
-	Content  map[string]OpenAPIMediaType      `json:"content"`
+	Required bool                        `json:"required"`
+	Content  map[string]OpenAPIMediaType `json:"content"`
 }
 
 // OpenAPIMediaType wraps a schema for a specific media type.

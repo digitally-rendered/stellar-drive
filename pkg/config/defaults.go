@@ -37,5 +37,21 @@ func DefaultConfig() *StellarConfig {
 		GraphQL: GraphQLConfig{
 			Path: "/graphql",
 		},
+		Health: HealthConfig{
+			Enabled:      true,
+			ReadyTimeout: 5 * time.Second,
+		},
+		Audit: AuditConfig{
+			Enabled:    false,
+			Collection: "audit_log",
+			TrackReads: false,
+		},
+		Policy: PolicyConfig{
+			Enabled:       false,
+			Mode:          "inline",
+			DefaultPolicy: "authz/allow",
+			Timeout:       5 * time.Second,
+			SkipPaths:     []string{"/health", "/ready"},
+		},
 	}
 }

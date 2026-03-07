@@ -97,14 +97,14 @@ func listSchemas(dir string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tVERSION\tSTORAGE\tSTATUS\tUPDATED")
-	fmt.Fprintln(w, "----\t-------\t-------\t------\t-------")
+	_, _ = fmt.Fprintln(w, "NAME\tVERSION\tSTORAGE\tSTATUS\tUPDATED")
+	_, _ = fmt.Fprintln(w, "----\t-------\t-------\t------\t-------")
 	for _, r := range rows {
 		updated := r.updated.Format(time.RFC3339)
 		if r.updated.IsZero() {
 			updated = "-"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 			r.name, r.version, r.storage, r.status, updated)
 	}
 	return w.Flush()

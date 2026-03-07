@@ -331,7 +331,7 @@ func (r *SQLRepository) List(ctx context.Context, schemaName string, q *query.Qu
 	if err != nil {
 		return nil, coreerrors.Internal("failed to list documents", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	items := make([]*model.Document, 0, limit)
 	for rows.Next() {
@@ -343,6 +343,14 @@ func (r *SQLRepository) List(ctx context.Context, schemaName string, q *query.Qu
 	}
 	if err := rows.Err(); err != nil {
 		return nil, coreerrors.Internal("failed to iterate document rows", err)
+	}
+
+	// Apply field projection if specified (SQL stores data as a single JSON
+	// column so projection must be applied after deserialization).
+	if q != nil && len(q.Fields) > 0 {
+		for _, doc := range items {
+			doc.Data = model.ProjectData(doc.Data, q.Fields)
+		}
 	}
 
 	hasMore := int64(offset+len(items)) < total

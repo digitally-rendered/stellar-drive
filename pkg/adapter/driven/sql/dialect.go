@@ -56,11 +56,11 @@ type Dialect interface {
 // (PostgreSQL, CockroachDB, AlloyDB, etc.).
 type PostgresDialect struct{}
 
-func (PostgresDialect) Placeholder(n int) string    { return fmt.Sprintf("$%d", n) }
-func (PostgresDialect) AutoIncrement() string       { return "BIGSERIAL PRIMARY KEY" }
-func (PostgresDialect) JSONColumn() string          { return "JSONB" }
-func (PostgresDialect) UpsertSuffix() string        { return "ON CONFLICT DO NOTHING" }
-func (PostgresDialect) DriverName() string          { return "postgres" }
+func (PostgresDialect) Placeholder(n int) string { return fmt.Sprintf("$%d", n) }
+func (PostgresDialect) AutoIncrement() string    { return "BIGSERIAL PRIMARY KEY" }
+func (PostgresDialect) JSONColumn() string       { return "JSONB" }
+func (PostgresDialect) UpsertSuffix() string     { return "ON CONFLICT DO NOTHING" }
+func (PostgresDialect) DriverName() string       { return "postgres" }
 func (PostgresDialect) QuoteIdentifier(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }

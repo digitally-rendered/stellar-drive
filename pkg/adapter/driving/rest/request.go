@@ -17,7 +17,7 @@ func DecodeBody(r *http.Request) (map[string]any, error) {
 	if r.Body == nil {
 		return nil, fmt.Errorf("request body is required")
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var data map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
@@ -33,13 +33,55 @@ func DecodeBulkBody(r *http.Request) ([]map[string]any, error) {
 	if r.Body == nil {
 		return nil, fmt.Errorf("request body is required")
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var items []map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&items); err != nil {
 		return nil, fmt.Errorf("decode bulk request body: %w", err)
 	}
 	return items, nil
+}
+
+// DecodeBulkUpdateBody reads the request body and decodes it as a JSON array
+// of BulkUpdateItem objects. Returns an error when the body is absent or
+// malformed, or when any element is missing the required entity_id field.
+func DecodeBulkUpdateBody(r *http.Request) ([]model.BulkUpdateItem, error) {
+	if r.Body == nil {
+		return nil, fmt.Errorf("request body is required")
+	}
+	defer func() { _ = r.Body.Close() }()
+
+	var items []model.BulkUpdateItem
+	if err := json.NewDecoder(r.Body).Decode(&items); err != nil {
+		return nil, fmt.Errorf("decode bulk update request body: %w", err)
+	}
+	for i, item := range items {
+		if item.EntityID == "" {
+			return nil, fmt.Errorf("item at index %d is missing required field entity_id", i)
+		}
+	}
+	return items, nil
+}
+
+// DecodeBulkDeleteBody reads the request body and decodes it as a JSON object
+// with an "ids" key whose value is an array of entity ID strings. Returns an
+// error when the body is absent, malformed, or the ids array is empty.
+func DecodeBulkDeleteBody(r *http.Request) ([]string, error) {
+	if r.Body == nil {
+		return nil, fmt.Errorf("request body is required")
+	}
+	defer func() { _ = r.Body.Close() }()
+
+	var payload struct {
+		IDs []string `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("decode bulk delete request body: %w", err)
+	}
+	if len(payload.IDs) == 0 {
+		return nil, fmt.Errorf("ids array is required and must not be empty")
+	}
+	return payload.IDs, nil
 }
 
 // ParseQueryParams extracts filter, sort, pagination, and projection from the

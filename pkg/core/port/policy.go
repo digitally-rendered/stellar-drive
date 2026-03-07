@@ -43,3 +43,11 @@ type PolicyEvaluator interface {
 	// name is an opaque identifier used to update or remove the policy later.
 	LoadPolicy(ctx context.Context, name string, policy []byte) error
 }
+
+// PolicyDecision carries the result of a policy evaluation. It is stored in
+// the request context by the policy middleware so downstream handlers can
+// inspect the decision.
+type PolicyDecision struct {
+	Allowed bool   `json:"allowed"`
+	Reason  string `json:"reason,omitempty"`
+}

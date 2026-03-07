@@ -29,6 +29,10 @@ const (
 	// CodeBadRequest indicates that the request itself is malformed.
 	CodeBadRequest ErrorCode = "BAD_REQUEST"
 
+	// CodePreconditionFailed indicates that a conditional request
+	// precondition (If-Match) was not met.
+	CodePreconditionFailed ErrorCode = "PRECONDITION_FAILED"
+
 	// CodeSchemaNotFound indicates that a named JSON Schema could not be found
 	// in the registry.
 	CodeSchemaNotFound ErrorCode = "SCHEMA_NOT_FOUND"
@@ -53,6 +57,8 @@ func (c ErrorCode) HTTPStatus() int {
 		return http.StatusForbidden // 403
 	case CodeBadRequest:
 		return http.StatusBadRequest // 400
+	case CodePreconditionFailed:
+		return http.StatusPreconditionFailed // 412
 	case CodeInternal:
 		return http.StatusInternalServerError // 500
 	default:

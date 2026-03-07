@@ -267,7 +267,7 @@ func TestAllTypes_Returns16DistinctTypes(t *testing.T) {
 
 func TestType_IsPre(t *testing.T) {
 	tests := []struct {
-		t      event.Type
+		t       event.Type
 		wantPre bool
 	}{
 		{event.PreCreate, true},

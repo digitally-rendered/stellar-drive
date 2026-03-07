@@ -12,10 +12,13 @@ type StellarConfig struct {
 	Auth       AuthConfig       `yaml:"auth"       json:"auth"`
 	Middleware MiddlewareConfig `yaml:"middleware"  json:"middleware"`
 	GraphQL    GraphQLConfig    `yaml:"graphql"    json:"graphql"`
+	Health     HealthConfig     `yaml:"health"     json:"health"`
+	Audit      AuditConfig      `yaml:"audit"      json:"audit"`
 	Webhooks   WebhooksConfig   `yaml:"webhooks"   json:"webhooks"`
 	Streaming  StreamingConfig  `yaml:"streaming"  json:"streaming"`
 	Telemetry  TelemetryConfig  `yaml:"telemetry"  json:"telemetry"`
 	Policy     PolicyConfig     `yaml:"policy"     json:"policy"`
+	Storage    StorageConfig    `yaml:"storage"    json:"storage"`
 }
 
 // ProjectConfig identifies the running service.
@@ -68,9 +71,35 @@ type JWTConfig struct {
 
 // MiddlewareConfig groups optional HTTP middleware settings.
 type MiddlewareConfig struct {
-	RateLimit       RateLimitConfig `yaml:"rate_limit"       json:"rate_limit"`
-	CORS            CORSConfig      `yaml:"cors"             json:"cors"`
-	SecurityHeaders bool            `yaml:"security_headers" json:"security_headers"`
+	RateLimit           RateLimitConfig       `yaml:"rate_limit"            json:"rate_limit"`
+	CORS                CORSConfig            `yaml:"cors"                  json:"cors"`
+	SecurityHeaders     bool                  `yaml:"security_headers"      json:"security_headers"`
+	SecurityHeadersOpts SecurityHeadersConfig `yaml:"security_headers_opts" json:"security_headers_opts"`
+	ContentNegotiation  bool                  `yaml:"content_negotiation"   json:"content_negotiation"`
+	ETag                bool                  `yaml:"etag"                  json:"etag"`
+	Cache               CacheConfig           `yaml:"cache"                 json:"cache"`
+}
+
+// SecurityHeadersConfig provides fine-grained control over the security
+// headers middleware when security_headers is enabled.
+type SecurityHeadersConfig struct {
+	HSTS              bool              `yaml:"hsts"               json:"hsts"`
+	ReferrerPolicy    string            `yaml:"referrer_policy"    json:"referrer_policy"`
+	PermissionsPolicy string            `yaml:"permissions_policy" json:"permissions_policy"`
+	CustomHeaders     map[string]string `yaml:"custom_headers"     json:"custom_headers"`
+}
+
+// CacheConfig controls the response caching middleware.
+type CacheConfig struct {
+	Enabled    bool          `yaml:"enabled"     json:"enabled"`
+	TTL        time.Duration `yaml:"ttl"         json:"ttl"`
+	MaxEntries int           `yaml:"max_entries" json:"max_entries"`
+}
+
+// StorageConfig controls per-schema storage backend routing.
+type StorageConfig struct {
+	Default string            `yaml:"default" json:"default"` // "mongo" or "sql"
+	Schemas map[string]string `yaml:"schemas" json:"schemas"` // schema name -> backend
 }
 
 // RateLimitConfig controls the token-bucket rate limiter.
@@ -110,8 +139,26 @@ type TelemetryConfig struct {
 	Endpoint string `yaml:"endpoint" json:"endpoint"`
 }
 
+// HealthConfig controls liveness and readiness probe endpoints.
+type HealthConfig struct {
+	Enabled      bool          `yaml:"enabled"       json:"enabled"`
+	ReadyTimeout time.Duration `yaml:"ready_timeout" json:"ready_timeout"`
+}
+
+// AuditConfig controls the audit trail subsystem.
+type AuditConfig struct {
+	Enabled    bool   `yaml:"enabled"     json:"enabled"`
+	Collection string `yaml:"collection"  json:"collection"`
+	TrackReads bool   `yaml:"track_reads" json:"track_reads"`
+}
+
 // PolicyConfig controls OPA / policy engine integration.
 type PolicyConfig struct {
-	Enabled bool   `yaml:"enabled" json:"enabled"`
-	Dir     string `yaml:"dir"     json:"dir"`
+	Enabled       bool          `yaml:"enabled"        json:"enabled"`
+	Mode          string        `yaml:"mode"           json:"mode"`           // "inline" or "remote"
+	Dir           string        `yaml:"dir"            json:"dir"`            // policy file directory
+	RemoteURL     string        `yaml:"remote_url"     json:"remote_url"`     // OPA server URL
+	DefaultPolicy string        `yaml:"default_policy" json:"default_policy"` // e.g. "authz/allow"
+	Timeout       time.Duration `yaml:"timeout"        json:"timeout"`        // HTTP timeout for remote OPA
+	SkipPaths     []string      `yaml:"skip_paths"     json:"skip_paths"`     // URL prefixes to skip
 }

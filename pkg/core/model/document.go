@@ -29,6 +29,24 @@ type BulkUpdateItem struct {
 	Data     map[string]any `json:"data"`
 }
 
+// BulkOperationResult holds the outcome of a bulk operation. Succeeded and
+// Failed are always present; Items is populated for write operations that
+// return documents (BulkCreate, BulkUpdate). Errors describes per-item
+// failures when partial success is allowed.
+type BulkOperationResult struct {
+	Succeeded int             `json:"succeeded"`
+	Failed    int             `json:"failed"`
+	Items     []*Document     `json:"items,omitempty"`
+	Errors    []BulkItemError `json:"errors,omitempty"`
+}
+
+// BulkItemError describes a per-item failure in a bulk operation. Index is
+// the zero-based position of the failing item in the original request slice.
+type BulkItemError struct {
+	Index   int    `json:"index"`
+	Message string `json:"message"`
+}
+
 // ListResult holds paginated query results.
 type ListResult struct {
 	Items   []*Document `json:"items"`
