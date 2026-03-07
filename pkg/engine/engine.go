@@ -167,7 +167,7 @@ func (e *Engine) Start(ctx context.Context) error {
 	e.router = chi.NewRouter()
 	e.router.Mount("/", middleware.Chain(mwStack...)(dataRouter))
 
-	// 8a. Mount health and readiness probes outside the middleware chain.
+	// 8a. Register health and readiness probes outside the middleware chain.
 	if e.cfg.Health.Enabled {
 		healthOpts := []rest.HealthOption{
 			rest.WithMongoConnection(conn),
@@ -177,7 +177,8 @@ func (e *Engine) Start(ctx context.Context) error {
 			healthOpts = append(healthOpts, rest.WithReadyTimeout(e.cfg.Health.ReadyTimeout))
 		}
 		healthHandler := rest.NewHealthHandler(healthOpts...)
-		e.router.Mount("/", healthHandler.Routes())
+		e.router.Get("/health", healthHandler.Health)
+		e.router.Get("/ready", healthHandler.Ready)
 	}
 
 	// 8b. Optionally mount the audit API.
