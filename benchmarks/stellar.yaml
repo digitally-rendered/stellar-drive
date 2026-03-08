@@ -1,0 +1,30 @@
+project:
+  name: stellar-drive-benchmark
+  version: "1.0.0"
+
+server:
+  port: 8200
+  host: "0.0.0.0"
+  read_timeout: 30s
+  write_timeout: 30s
+  graceful_shutdown: 5s
+  api_prefix: /api/v1
+
+schemas:
+  dir: ./benchmarks/schemas
+  hot_reload: false
+
+mongo:
+  uri: mongodb://localhost:27017
+  database: stellar_drive_bench
+  max_pool_size: 100
+
+graphql:
+  enabled: true
+  versioned: true
+
+middleware:
+  security_headers: false
+  rate_limit:
+    requests_per_second: 0
+    burst: 0

@@ -610,3 +610,259 @@ func TestGraphQL_DeletePet_NotFound(t *testing.T) {
 	}`)
 	assert.NotEmpty(t, result.Errors, "deletePet for missing entity must return an error")
 }
+
+// ---------------------------------------------------------------------------
+// BuildVersionedSchema tests
+// ---------------------------------------------------------------------------
+
+// versionedSchemaSetup builds a registry with two versions of "pet" plus
+// one version of "toy", then constructs a BuildVersionedSchema-backed
+// gql.Schema. It returns the schema, a map of mock services keyed by schema
+// name, and the registry.
+func versionedSchemaSetup(t *testing.T) (gql.Schema, map[string]*mockService) {
+	t.Helper()
+
+	reg := schemapkg.NewRegistry()
+
+	// pet v1 — minimal fields.
+	_, err := reg.Register(&schemapkg.SchemaEnvelope{
+		Name:    "pet",
+		Version: "1.0.0",
+		Schema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"name": map[string]any{"type": "string"},
+			},
+		},
+		Active: true,
+	})
+	require.NoError(t, err)
+
+	// pet v2 — latest; adds microchip_id.
+	_, err = reg.Register(&schemapkg.SchemaEnvelope{
+		Name:    "pet",
+		Version: "2.0.0",
+		Schema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"name":         map[string]any{"type": "string"},
+				"microchip_id": map[string]any{"type": "string"},
+			},
+		},
+		Active: true,
+	})
+	require.NoError(t, err)
+
+	// toy v1 — single version schema.
+	_, err = reg.Register(&schemapkg.SchemaEnvelope{
+		Name:    "toy",
+		Version: "1.0.0",
+		Schema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"label": map[string]any{"type": "string"},
+			},
+		},
+		Active: true,
+	})
+	require.NoError(t, err)
+
+	mocks := map[string]*mockService{
+		"pet": newMockService(),
+		"toy": newMockService(),
+	}
+
+	// Route each schema name to its mock via the container default service.
+	// The container's ResolveService falls back to the default for any name,
+	// so we need a dispatcher that picks the right mock.
+	dispatcher := &dispatchService{mocks: mocks}
+	ctr := container.New(container.WithDefaultService(dispatcher))
+
+	schema, err := BuildVersionedSchema(reg, ctr)
+	require.NoError(t, err)
+	return schema, mocks
+}
+
+// dispatchService routes service calls to the correct mockService by
+// inspecting the schemaName argument. This lets a single container serve
+// multiple schemas in tests.
+type dispatchService struct {
+	mocks map[string]*mockService
+}
+
+func (d *dispatchService) mock(name string) *mockService {
+	if m, ok := d.mocks[name]; ok {
+		return m
+	}
+	// Fallback to the first available mock to keep the resolver happy.
+	for _, m := range d.mocks {
+		return m
+	}
+	return newMockService()
+}
+
+func (d *dispatchService) Create(ctx context.Context, schemaName string, input map[string]any) (*model.Document, error) {
+	return d.mock(schemaName).Create(ctx, schemaName, input)
+}
+func (d *dispatchService) FindByID(ctx context.Context, schemaName string, entityID string) (*model.Document, error) {
+	return d.mock(schemaName).FindByID(ctx, schemaName, entityID)
+}
+func (d *dispatchService) List(ctx context.Context, schemaName string, q *query.Query) (*model.ListResult, error) {
+	return d.mock(schemaName).List(ctx, schemaName, q)
+}
+func (d *dispatchService) Update(ctx context.Context, schemaName string, entityID string, input map[string]any) (*model.Document, error) {
+	return d.mock(schemaName).Update(ctx, schemaName, entityID, input)
+}
+func (d *dispatchService) Delete(ctx context.Context, schemaName string, entityID string) error {
+	return d.mock(schemaName).Delete(ctx, schemaName, entityID)
+}
+func (d *dispatchService) BulkCreate(ctx context.Context, schemaName string, inputs []map[string]any) ([]*model.Document, error) {
+	return d.mock(schemaName).BulkCreate(ctx, schemaName, inputs)
+}
+func (d *dispatchService) BulkUpdate(ctx context.Context, schemaName string, items []model.BulkUpdateItem) ([]*model.Document, error) {
+	return d.mock(schemaName).BulkUpdate(ctx, schemaName, items)
+}
+func (d *dispatchService) BulkDelete(ctx context.Context, schemaName string, ids []string) error {
+	return d.mock(schemaName).BulkDelete(ctx, schemaName, ids)
+}
+
+func TestBuildVersionedSchema_HasQueryType(t *testing.T) {
+	schema, _ := versionedSchemaSetup(t)
+	assert.NotNil(t, schema.QueryType(), "BuildVersionedSchema must produce a Query root type")
+}
+
+func TestBuildVersionedSchema_HasMutationType(t *testing.T) {
+	schema, _ := versionedSchemaSetup(t)
+	assert.NotNil(t, schema.MutationType(), "BuildVersionedSchema must produce a Mutation root type")
+}
+
+func TestBuildVersionedSchema_VersionedQueryFieldsPresent(t *testing.T) {
+	schema, _ := versionedSchemaSetup(t)
+	qFields := schema.QueryType().Fields()
+
+	// versioned fields for pet v1
+	assert.Contains(t, qFields, "getPetV1_0_0", "versioned get field for pet v1.0.0 must exist")
+	assert.Contains(t, qFields, "listPetV1_0_0s", "versioned list field for pet v1.0.0 must exist")
+
+	// versioned fields for pet v2 (latest)
+	assert.Contains(t, qFields, "getPetV2_0_0", "versioned get field for pet v2.0.0 must exist")
+	assert.Contains(t, qFields, "listPetV2_0_0s", "versioned list field for pet v2.0.0 must exist")
+
+	// unversioned aliases for latest (pet v2)
+	assert.Contains(t, qFields, "getPet", "unversioned get alias for latest pet must exist")
+	assert.Contains(t, qFields, "listPets", "unversioned list alias for latest pet must exist")
+
+	// versioned fields for toy v1 (which is also latest)
+	assert.Contains(t, qFields, "getToyV1_0_0", "versioned get field for toy v1.0.0 must exist")
+	assert.Contains(t, qFields, "getToy", "unversioned get alias for latest toy must exist")
+}
+
+func TestBuildVersionedSchema_VersionedMutationFieldsPresent(t *testing.T) {
+	schema, _ := versionedSchemaSetup(t)
+	mFields := schema.MutationType().Fields()
+
+	assert.Contains(t, mFields, "createPetV1_0_0")
+	assert.Contains(t, mFields, "updatePetV1_0_0")
+	assert.Contains(t, mFields, "deletePetV1_0_0")
+	assert.Contains(t, mFields, "createPetV2_0_0")
+	assert.Contains(t, mFields, "updatePetV2_0_0")
+	assert.Contains(t, mFields, "deletePetV2_0_0")
+
+	// Unversioned aliases for latest.
+	assert.Contains(t, mFields, "createPet")
+	assert.Contains(t, mFields, "updatePet")
+	assert.Contains(t, mFields, "deletePet")
+}
+
+func TestBuildVersionedSchema_LatestTypeUsesUnversionedName(t *testing.T) {
+	schema, _ := versionedSchemaSetup(t)
+	typeMap := schema.TypeMap()
+
+	// latest pet version must appear as "Pet" (not "PetV2_0_0").
+	_, hasPet := typeMap["Pet"]
+	assert.True(t, hasPet, "latest pet type must be registered as 'Pet'")
+
+	// older pet version must appear as "PetV1_0_0".
+	_, hasPetV1 := typeMap["PetV1_0_0"]
+	assert.True(t, hasPetV1, "older pet version must be registered as 'PetV1_0_0'")
+
+	// no stray versioned type for the latest should exist.
+	_, hasPetV2 := typeMap["PetV2_0_0"]
+	assert.False(t, hasPetV2, "latest pet version must NOT also appear as 'PetV2_0_0'")
+}
+
+func TestBuildVersionedSchema_EmptyRegistry(t *testing.T) {
+	reg := schemapkg.NewRegistry()
+	ctr := container.New()
+
+	schema, err := BuildVersionedSchema(reg, ctr)
+	require.NoError(t, err)
+	assert.NotNil(t, schema.QueryType(), "empty registry must still produce a valid placeholder schema")
+}
+
+func TestBuildVersionedSchema_CreateViaVersionedField(t *testing.T) {
+	schema, mocks := versionedSchemaSetup(t)
+
+	// Create a pet via the versioned v2 mutation field.
+	result := doQueryWithVars(schema, `
+		mutation CreatePet($input: JSON!) {
+			createPetV2_0_0(input: $input) {
+				entity_id
+				record_version
+			}
+		}
+	`, map[string]any{
+		"input": map[string]any{"name": "Rex", "microchip_id": "MC123"},
+	})
+
+	require.Empty(t, result.Errors, "createPetV2_0_0 must succeed without errors")
+	data, ok := result.Data.(map[string]any)
+	require.True(t, ok)
+	created, ok := data["createPetV2_0_0"].(map[string]any)
+	require.True(t, ok)
+	assert.NotEmpty(t, created["entity_id"])
+	assert.Equal(t, 1, created["record_version"])
+
+	// Confirm the mock stored the document.
+	assert.Len(t, mocks["pet"].docs, 1)
+}
+
+func TestBuildVersionedSchema_GetViaUnversionedAlias(t *testing.T) {
+	schema, mocks := versionedSchemaSetup(t)
+
+	// Pre-seed a pet document directly in the mock.
+	ctx := context.Background()
+	doc, err := mocks["pet"].Create(ctx, "pet", map[string]any{"name": "Whiskers"})
+	require.NoError(t, err)
+
+	result := doQueryWithVars(schema, `
+		query GetPet($id: ID!) {
+			getPet(entityId: $id) {
+				entity_id
+				record_version
+			}
+		}
+	`, map[string]any{"id": doc.EntityID})
+
+	require.Empty(t, result.Errors, "getPet (unversioned alias) must resolve the document")
+	data := result.Data.(map[string]any)
+	got := data["getPet"].(map[string]any)
+	assert.Equal(t, doc.EntityID, got["entity_id"])
+}
+
+func TestVersionSuffix(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"1.0.0", "V1_0_0"},
+		{"2.3.1", "V2_3_1"},
+		{"v1.0.0", "V1_0_0"}, // leading "v" is stripped
+		{"10.0.0", "V10_0_0"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.input, func(t *testing.T) {
+			assert.Equal(t, tc.want, versionSuffix(tc.input))
+		})
+	}
+}

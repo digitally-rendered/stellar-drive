@@ -167,7 +167,7 @@ func (e *Engine) Start(ctx context.Context) error {
 	e.router = chi.NewRouter()
 	e.router.Mount("/", middleware.Chain(mwStack...)(dataRouter))
 
-	// 8a. Mount health and readiness probes outside the middleware chain.
+	// 8a. Register health and readiness probes outside the middleware chain.
 	if e.cfg.Health.Enabled {
 		healthOpts := []rest.HealthOption{
 			rest.WithMongoConnection(conn),
@@ -177,7 +177,8 @@ func (e *Engine) Start(ctx context.Context) error {
 			healthOpts = append(healthOpts, rest.WithReadyTimeout(e.cfg.Health.ReadyTimeout))
 		}
 		healthHandler := rest.NewHealthHandler(healthOpts...)
-		e.router.Mount("/", healthHandler.Routes())
+		e.router.Get("/health", healthHandler.Health)
+		e.router.Get("/ready", healthHandler.Ready)
 	}
 
 	// 8b. Optionally mount the audit API.
@@ -193,6 +194,18 @@ func (e *Engine) Start(ctx context.Context) error {
 			slog.WarnContext(ctx, "graphql endpoint disabled", "error", err)
 		}
 	}
+
+	// 8d. Mount the live OpenAPI specification endpoint.
+	e.router.Get("/openapi.json", rest.NewOpenAPIHandler(
+		e.registry,
+		e.cfg.Project.Name,
+		e.cfg.Project.Version,
+		e.cfg.GraphQL.Versioned,
+	))
+	slog.InfoContext(ctx, "openapi endpoint mounted",
+		"path", "/openapi.json",
+		"versioned", e.cfg.GraphQL.Versioned,
+	)
 
 	// 9. Configure and start the HTTP server.
 	addr := fmt.Sprintf("%s:%d", e.cfg.Server.Host, e.cfg.Server.Port)
@@ -336,13 +349,20 @@ func (e *Engine) loadSchemasFromStore(ctx context.Context) error {
 
 // mountGraphQL builds the GraphQL schema from the registry and mounts the
 // handler at the configured path (defaulting to "/graphql").
+// When cfg.GraphQL.Versioned is true, BuildVersionedSchema is used so that
+// every registered schema version gets its own set of typed fields; otherwise
+// only the latest version of each schema is exposed via BuildSchema.
 func (e *Engine) mountGraphQL(ctx context.Context) error {
 	path := e.cfg.GraphQL.Path
 	if path == "" {
 		path = "/graphql"
 	}
 
-	gqlSchema, err := graphqladapter.BuildSchema(e.registry, e.ctr)
+	build := graphqladapter.BuildSchema
+	if e.cfg.GraphQL.Versioned {
+		build = graphqladapter.BuildVersionedSchema
+	}
+	gqlSchema, err := build(e.registry, e.ctr)
 	if err != nil {
 		return fmt.Errorf("build graphql schema: %w", err)
 	}
@@ -350,7 +370,10 @@ func (e *Engine) mountGraphQL(ctx context.Context) error {
 	handler := graphqladapter.NewHandler(gqlSchema)
 	e.router.Mount(path, handler)
 
-	slog.InfoContext(ctx, "graphql endpoint mounted", "path", path)
+	slog.InfoContext(ctx, "graphql endpoint mounted",
+		"path", path,
+		"versioned", e.cfg.GraphQL.Versioned,
+	)
 	return nil
 }
 

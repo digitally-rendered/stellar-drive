@@ -1,0 +1,44 @@
+{
+  "name": "order",
+  "version": "1.0.0",
+  "description": "Store order from OA3 Petstore benchmark",
+  "storage": "mongo",
+  "collection": "orders",
+  "schema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "required": ["pet_id", "quantity"],
+    "properties": {
+      "pet_id": {
+        "type": "string",
+        "description": "Reference to the pet being ordered"
+      },
+      "quantity": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "Number of pets ordered",
+        "default": 1
+      },
+      "ship_date": {
+        "type": "string",
+        "format": "date-time",
+        "description": "Estimated ship date"
+      },
+      "status": {
+        "type": "string",
+        "description": "Order status",
+        "enum": ["placed", "approved", "delivered"],
+        "default": "placed"
+      },
+      "complete": {
+        "type": "boolean",
+        "default": false,
+        "description": "Whether the order has been completed"
+      }
+    }
+  },
+  "indexes": [
+    { "fields": ["status"], "unique": false },
+    { "fields": ["pet_id"], "unique": false }
+  ]
+}

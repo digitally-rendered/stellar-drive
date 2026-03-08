@@ -1,0 +1,57 @@
+# docker-compose for benchmark testing with resource constraints.
+#
+# Usage:
+#   docker compose -f benchmarks/docker-compose.yml up -d             # start all
+#   docker compose -f benchmarks/docker-compose.yml up -d mongo       # just DB
+#   docker compose -f benchmarks/docker-compose.yml run k6-perf       # run perf tests
+#   docker compose -f benchmarks/docker-compose.yml down -v           # cleanup
+#
+# Constrained testing (edit deploy.resources below or override):
+#   STELLAR_CPU=0.5 STELLAR_MEM=128m docker compose -f benchmarks/docker-compose.yml up -d
+
+services:
+  mongo:
+    image: mongo:7
+    ports:
+      - "27117:27017"
+    healthcheck:
+      test: mongosh --eval 'db.runCommand({ping:1})' --quiet
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  stellar-drive:
+    build:
+      context: ..
+      dockerfile: benchmarks/Dockerfile
+    ports:
+      - "8200:8200"
+    environment:
+      - STELLAR_MONGO_URI=mongodb://mongo:27017
+      - STELLAR_MONGO_DATABASE=stellar_drive_bench
+      - STELLAR_SERVER_PORT=8200
+    depends_on:
+      mongo:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "${STELLAR_CPU:-2}"
+          memory: "${STELLAR_MEM:-1g}"
+
+  k6-perf:
+    image: grafana/k6:latest
+    volumes:
+      - ./k6:/scripts
+      - ./results:/results
+    working_dir: /scripts
+    environment:
+      - BASE_URL=http://stellar-drive:8200/api/v1
+      - SCENARIO=${K6_SCENARIO:-smoke}
+      - ENTITIES=${K6_ENTITIES:-pet,order,user,tag,category}
+    entrypoint: ["k6", "run", "/scripts/perf_baseline.js", "--summary-export=/results/k6-docker-summary.json"]
+    depends_on:
+      stellar-drive:
+        condition: service_healthy
+    profiles:
+      - test
