@@ -89,6 +89,25 @@ jobs:
             --output benchmarks/results/fuzz-ci.json
         continue-on-error: true
 
+      - name: Run GraphQL fuzz tests
+        run: |
+          python benchmarks/fuzz/run_graphql_fuzz.py \
+            --url http://localhost:8200/graphql \
+            --mode all \
+            --output benchmarks/results/graphql-fuzz-ci.json
+        continue-on-error: true
+
+      - name: Run MCP fuzz tests
+        run: |
+          python benchmarks/fuzz/run_mcp_fuzz.py \
+            --cmd "./stellar-drive mcp --config benchmarks/stellar.yaml" \
+            --mode all \
+            --output benchmarks/results/mcp-fuzz-ci.json
+        continue-on-error: true
+
+      - name: Run stream validation tests
+        run: go test ./benchmarks/stream/ -run TestStream -v -count=1 || true
+
       - name: Run stream Go benchmarks
         run: go test ./benchmarks/stream/ -bench=. -benchmem -count=1 || true
 

@@ -1,6 +1,7 @@
 .PHONY: build test test-int test-e2e test-all lint vet generate clean coverage tidy install \
 	bench-perf bench-load bench-breaking bench-constrained bench-limits bench-compat bench-clean \
-	bench-fuzz bench-stream bench-stream-e2e
+	bench-fuzz bench-stream bench-stream-e2e \
+	bench-graphql-fuzz bench-graphql-perf bench-mcp-fuzz bench-stream-fuzz
 
 # Build all packages (verify compilation).
 build:
@@ -105,6 +106,30 @@ bench-stream-e2e:
 	status=$$?; \
 	docker compose -f benchmarks/docker-compose.streams.yml down -v; \
 	exit $$status
+
+# --- GraphQL testing targets ---
+
+# Run GraphQL fuzz tests against local app (must be running on :8200)
+bench-graphql-fuzz:
+	python benchmarks/fuzz/run_graphql_fuzz.py --url http://localhost:8200/graphql --mode all --output benchmarks/results/graphql-fuzz-results.json
+
+# Run GraphQL k6 performance tests (app must be running on :8200)
+bench-graphql-perf:
+	k6 run benchmarks/k6/graphql_perf.js --env BASE_URL=http://localhost:8200/graphql
+
+# --- MCP testing targets ---
+
+# Run MCP fuzz tests
+bench-mcp-fuzz:
+	python benchmarks/fuzz/run_mcp_fuzz.py \
+		--cmd "./stellar-drive mcp --config benchmarks/stellar.yaml" \
+		--mode all --output benchmarks/results/mcp-fuzz-results.json
+
+# --- Stream validation targets ---
+
+# Run stream event schema validation (Go tests)
+bench-stream-fuzz:
+	go test ./benchmarks/stream/ -run TestStream -v -count=1
 
 # Clean benchmark results
 bench-clean:

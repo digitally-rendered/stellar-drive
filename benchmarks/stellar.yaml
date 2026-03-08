@@ -20,7 +20,8 @@ mongo:
   max_pool_size: 100
 
 graphql:
-  enabled: false
+  enabled: true
+  versioned: true
 
 middleware:
   security_headers: false

@@ -80,6 +80,14 @@ jobs:
             --out json=benchmarks/results/ci-raw.json
         continue-on-error: true
 
+      - name: Run GraphQL k6 benchmark
+        run: |
+          k6 run benchmarks/k6/graphql_perf.js \
+            --env BASE_URL=http://localhost:8200/graphql \
+            --env "SCENARIO=${K6_SCENARIO}" \
+            --summary-export=benchmarks/results/graphql-ci-summary.json
+        continue-on-error: true
+
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4
         with:

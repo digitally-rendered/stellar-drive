@@ -118,6 +118,10 @@ type GraphQLConfig struct {
 	Enabled    bool   `yaml:"enabled"    json:"enabled"`
 	Path       string `yaml:"path"       json:"path"`
 	Playground bool   `yaml:"playground" json:"playground"`
+	// Versioned controls whether the live /openapi.json endpoint emits a
+	// versioned spec (all schema versions with decorated paths) or only the
+	// latest version of each schema. Reused by the OpenAPI handler.
+	Versioned bool `yaml:"versioned" json:"versioned"`
 }
 
 // WebhooksConfig controls outbound webhook delivery.
