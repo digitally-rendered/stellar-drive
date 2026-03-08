@@ -98,7 +98,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 
 	mux.HandleFunc("GET /events", func(w http.ResponseWriter, r *http.Request) {
@@ -110,12 +110,12 @@ func main() {
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 		evts := st.get(topic, limit)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(evts)
+		_ = json.NewEncoder(w).Encode(evts)
 	})
 
 	mux.HandleFunc("GET /stats", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(st.stats())
+		_ = json.NewEncoder(w).Encode(st.stats())
 	})
 
 	mux.HandleFunc("DELETE /reset", func(w http.ResponseWriter, _ *http.Request) {

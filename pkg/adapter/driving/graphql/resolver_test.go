@@ -857,7 +857,7 @@ func TestVersionSuffix(t *testing.T) {
 	}{
 		{"1.0.0", "V1_0_0"},
 		{"2.3.1", "V2_3_1"},
-		{"v1.0.0", "V1_0_0"},   // leading "v" is stripped
+		{"v1.0.0", "V1_0_0"}, // leading "v" is stripped
 		{"10.0.0", "V10_0_0"},
 	}
 	for _, tc := range cases {

@@ -172,7 +172,7 @@ func TestStreamCorruptedPayloadNoCrash(t *testing.T) {
 		{name: "json_null", payload: []byte(`null`)},
 		{name: "json_number", payload: []byte(`42`)},
 		{name: "json_string", payload: []byte(`"just a string"`)},
-		{name: "truncated_utf8", payload: []byte{0xc3}},               // incomplete two-byte UTF-8 sequence
+		{name: "truncated_utf8", payload: []byte{0xc3}}, // incomplete two-byte UTF-8 sequence
 		{name: "binary_garbage", payload: []byte{0x00, 0xff, 0xfe, 0xfd}},
 	}
 

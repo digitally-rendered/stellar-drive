@@ -79,7 +79,7 @@ func BenchmarkBridgeForward(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bus.Publish(ctx, evt)
+		_ = bus.Publish(ctx, evt)
 	}
 	b.ReportMetric(float64(s.Len()), "published")
 }
