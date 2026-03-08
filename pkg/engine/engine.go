@@ -13,17 +13,21 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/go-chi/chi/v5"
 
 	mongoadapter "github.com/digitally-rendered/stellar-drive/pkg/adapter/driven/mongo"
+	policyadapter "github.com/digitally-rendered/stellar-drive/pkg/adapter/driven/policy"
 	graphqladapter "github.com/digitally-rendered/stellar-drive/pkg/adapter/driving/graphql"
 	"github.com/digitally-rendered/stellar-drive/pkg/adapter/driving/rest"
 	"github.com/digitally-rendered/stellar-drive/pkg/adapter/driving/rest/middleware"
 	"github.com/digitally-rendered/stellar-drive/pkg/config"
 	"github.com/digitally-rendered/stellar-drive/pkg/core/container"
 	"github.com/digitally-rendered/stellar-drive/pkg/core/event"
+	"github.com/digitally-rendered/stellar-drive/pkg/core/port"
 	"github.com/digitally-rendered/stellar-drive/pkg/core/registry"
 	"github.com/digitally-rendered/stellar-drive/pkg/core/schema"
 	"github.com/digitally-rendered/stellar-drive/pkg/core/service"
@@ -38,13 +42,17 @@ type Engine struct {
 	eventBus    *event.Bus
 	ctr         *container.Container
 	funcReg     *registry.FunctionRegistry
+	policyEval  port.PolicyEvaluator
 	mongoConn   *mongoadapter.Connection
 	schemaStore *mongoadapter.MongoSchemaStore
 	router      chi.Router
 	server      *http.Server
 
+	// Schema hot-reload watcher (nil when hot_reload is disabled).
+	schemaWatcher *schema.SchemaWatcher
+
 	// Options applied at construction time.
-	schemaDir      string
+	schemaDir       string
 	extraMiddleware []func(http.Handler) http.Handler
 }
 
@@ -104,8 +112,33 @@ func (e *Engine) Start(ctx context.Context) error {
 		slog.WarnContext(ctx, "schema store load skipped", "error", err)
 	}
 
+	// 4a. Optionally start the schema hot-reload watcher.
+	if e.cfg.Schemas.HotReload && e.schemaDir != "" {
+		watcher := schema.NewSchemaWatcher(e.schemaDir, e.registry,
+			schema.WithOnReload(func(name, version string) {
+				slog.InfoContext(ctx, "schema hot-reloaded", "name", name, "version", version)
+			}),
+		)
+		watcher.Start(ctx)
+		e.schemaWatcher = watcher
+		slog.InfoContext(ctx, "schema hot-reload watcher started", "dir", e.schemaDir)
+	}
+
 	// 5. Create GenericCRUDService wired to the MongoDB repository.
 	svc := service.NewGenericCRUDService(repo, e.eventBus, e.registry)
+
+	// 5a. Optionally wire the audit trail.
+	var auditStore *mongoadapter.MongoAuditStore
+	if e.cfg.Audit.Enabled {
+		auditStoreOpts := []mongoadapter.AuditStoreOption{}
+		if e.cfg.Audit.Collection != "" {
+			auditStoreOpts = append(auditStoreOpts, mongoadapter.WithAuditCollection(e.cfg.Audit.Collection))
+		}
+		auditStore = mongoadapter.NewAuditStore(conn, auditStoreOpts...)
+		audit := service.NewAuditTrail(auditStore, service.WithTrackReads(e.cfg.Audit.TrackReads))
+		audit.Register(e.eventBus)
+		slog.InfoContext(ctx, "audit trail enabled", "collection", e.cfg.Audit.Collection)
+	}
 
 	// 6. Build the DI container with defaults.
 	e.ctr = container.New(
@@ -114,22 +147,65 @@ func (e *Engine) Start(ctx context.Context) error {
 		container.WithEventBus(e.eventBus),
 	)
 
+	// 6a. Optionally build the policy evaluator from config.
+	if e.cfg.Policy.Enabled && e.policyEval == nil {
+		eval, err := e.buildPolicyEvaluator(ctx)
+		if err != nil {
+			slog.WarnContext(ctx, "policy evaluator disabled", "error", err)
+		} else {
+			e.policyEval = eval
+			slog.InfoContext(ctx, "policy evaluator enabled", "mode", e.cfg.Policy.Mode)
+		}
+	}
+
 	// 7. Build the middleware stack.
 	mwStack := e.buildMiddleware()
 
 	// 8. Build the Chi router and mount all schema routes.
 	apiPrefix := e.cfg.Server.APIPrefix
-	dataRouter := rest.NewRouter(apiPrefix, e.registry, e.ctr, e.schemaStore)
+	dataRouter := rest.NewRouter(apiPrefix, e.registry, e.ctr, e.schemaStore, e.funcReg)
 	e.router = chi.NewRouter()
 	e.router.Mount("/", middleware.Chain(mwStack...)(dataRouter))
 
-	// 8a. Optionally mount the GraphQL endpoint.
+	// 8a. Register health and readiness probes outside the middleware chain.
+	if e.cfg.Health.Enabled {
+		healthOpts := []rest.HealthOption{
+			rest.WithMongoConnection(conn),
+			rest.WithSchemaRegistry(e.registry),
+		}
+		if e.cfg.Health.ReadyTimeout > 0 {
+			healthOpts = append(healthOpts, rest.WithReadyTimeout(e.cfg.Health.ReadyTimeout))
+		}
+		healthHandler := rest.NewHealthHandler(healthOpts...)
+		e.router.Get("/health", healthHandler.Health)
+		e.router.Get("/ready", healthHandler.Ready)
+	}
+
+	// 8b. Optionally mount the audit API.
+	if e.cfg.Audit.Enabled && auditStore != nil {
+		auditAPI := rest.NewAuditAPI(auditStore)
+		e.router.Mount(apiPrefix+"/_audit", auditAPI.Routes())
+	}
+
+	// 8c. Optionally mount the GraphQL endpoint.
 	if e.cfg.GraphQL.Enabled {
 		if err := e.mountGraphQL(ctx); err != nil {
 			// Non-fatal: log and continue without GraphQL.
 			slog.WarnContext(ctx, "graphql endpoint disabled", "error", err)
 		}
 	}
+
+	// 8d. Mount the live OpenAPI specification endpoint.
+	e.router.Get("/openapi.json", rest.NewOpenAPIHandler(
+		e.registry,
+		e.cfg.Project.Name,
+		e.cfg.Project.Version,
+		e.cfg.GraphQL.Versioned,
+	))
+	slog.InfoContext(ctx, "openapi endpoint mounted",
+		"path", "/openapi.json",
+		"versioned", e.cfg.GraphQL.Versioned,
+	)
 
 	// 9. Configure and start the HTTP server.
 	addr := fmt.Sprintf("%s:%d", e.cfg.Server.Host, e.cfg.Server.Port)
@@ -188,6 +264,11 @@ func (e *Engine) Start(ctx context.Context) error {
 // It is safe to call from outside Start (e.g. tests).
 func (e *Engine) Shutdown(ctx context.Context) error {
 	var errs []error
+
+	if e.schemaWatcher != nil {
+		slog.InfoContext(ctx, "stopping schema watcher")
+		e.schemaWatcher.Stop()
+	}
 
 	if e.server != nil {
 		slog.InfoContext(ctx, "shutting down http server")
@@ -268,13 +349,20 @@ func (e *Engine) loadSchemasFromStore(ctx context.Context) error {
 
 // mountGraphQL builds the GraphQL schema from the registry and mounts the
 // handler at the configured path (defaulting to "/graphql").
+// When cfg.GraphQL.Versioned is true, BuildVersionedSchema is used so that
+// every registered schema version gets its own set of typed fields; otherwise
+// only the latest version of each schema is exposed via BuildSchema.
 func (e *Engine) mountGraphQL(ctx context.Context) error {
 	path := e.cfg.GraphQL.Path
 	if path == "" {
 		path = "/graphql"
 	}
 
-	gqlSchema, err := graphqladapter.BuildSchema(e.registry, e.ctr)
+	build := graphqladapter.BuildSchema
+	if e.cfg.GraphQL.Versioned {
+		build = graphqladapter.BuildVersionedSchema
+	}
+	gqlSchema, err := build(e.registry, e.ctr)
 	if err != nil {
 		return fmt.Errorf("build graphql schema: %w", err)
 	}
@@ -282,7 +370,63 @@ func (e *Engine) mountGraphQL(ctx context.Context) error {
 	handler := graphqladapter.NewHandler(gqlSchema)
 	e.router.Mount(path, handler)
 
-	slog.InfoContext(ctx, "graphql endpoint mounted", "path", path)
+	slog.InfoContext(ctx, "graphql endpoint mounted",
+		"path", path,
+		"versioned", e.cfg.GraphQL.Versioned,
+	)
+	return nil
+}
+
+// buildPolicyEvaluator constructs the appropriate policy evaluator based on
+// the configured mode ("inline" or "remote").
+func (e *Engine) buildPolicyEvaluator(ctx context.Context) (port.PolicyEvaluator, error) {
+	switch e.cfg.Policy.Mode {
+	case "remote":
+		opts := []policyadapter.RemoteOPAOption{}
+		if e.cfg.Policy.RemoteURL != "" {
+			opts = append(opts, policyadapter.WithOPAURL(e.cfg.Policy.RemoteURL))
+		}
+		if e.cfg.Policy.DefaultPolicy != "" {
+			opts = append(opts, policyadapter.WithDefaultPolicy(e.cfg.Policy.DefaultPolicy))
+		}
+		if e.cfg.Policy.Timeout > 0 {
+			opts = append(opts, policyadapter.WithOPATimeout(e.cfg.Policy.Timeout))
+		}
+		return policyadapter.NewRemoteOPAEvaluator(opts...), nil
+
+	default: // "inline"
+		eval := policyadapter.NewInlineEvaluator()
+		if e.cfg.Policy.Dir != "" {
+			if err := e.loadPolicyFiles(ctx, eval); err != nil {
+				slog.WarnContext(ctx, "policy files load skipped", "dir", e.cfg.Policy.Dir, "error", err)
+			}
+		}
+		return eval, nil
+	}
+}
+
+// loadPolicyFiles reads *.rego files from the configured policy directory
+// and loads them into the evaluator via LoadPolicy.
+func (e *Engine) loadPolicyFiles(ctx context.Context, eval port.PolicyEvaluator) error {
+	pattern := filepath.Join(e.cfg.Policy.Dir, "*.rego")
+	files, err := filepath.Glob(pattern)
+	if err != nil {
+		return fmt.Errorf("glob policy files: %w", err)
+	}
+
+	for _, f := range files {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			slog.WarnContext(ctx, "failed to read policy file", "file", f, "error", err)
+			continue
+		}
+		name := strings.TrimSuffix(filepath.Base(f), ".rego")
+		if err := eval.LoadPolicy(ctx, name, data); err != nil {
+			slog.WarnContext(ctx, "failed to load policy", "file", f, "error", err)
+		} else {
+			slog.InfoContext(ctx, "loaded policy file", "name", name, "file", f)
+		}
+	}
 	return nil
 }
 
@@ -298,12 +442,58 @@ func (e *Engine) buildMiddleware() []func(http.Handler) http.Handler {
 
 	// Security headers are opt-in via config (default true).
 	if e.cfg.Middleware.SecurityHeaders {
-		mw = append(mw, middleware.SecurityHeaders)
+		secOpts := []middleware.SecurityHeadersOption{}
+		shCfg := e.cfg.Middleware.SecurityHeadersOpts
+		if shCfg.HSTS {
+			secOpts = append(secOpts, middleware.WithHSTS(true))
+		}
+		if shCfg.ReferrerPolicy != "" {
+			secOpts = append(secOpts, middleware.WithReferrerPolicy(shCfg.ReferrerPolicy))
+		}
+		if shCfg.PermissionsPolicy != "" {
+			secOpts = append(secOpts, middleware.WithPermissionsPolicy(shCfg.PermissionsPolicy))
+		}
+		if len(shCfg.CustomHeaders) > 0 {
+			secOpts = append(secOpts, middleware.WithCustomHeaders(shCfg.CustomHeaders))
+		}
+		mw = append(mw, middleware.NewSecurityHeaders(secOpts...))
+	}
+
+	// ETag / conditional request handling (opt-in).
+	if e.cfg.Middleware.ETag {
+		mw = append(mw, middleware.ETag())
 	}
 
 	// CORS is enabled when allowed origins are configured.
 	if len(e.cfg.Middleware.CORS.AllowedOrigins) > 0 {
 		mw = append(mw, middleware.CORS(e.cfg.Middleware.CORS.AllowedOrigins))
+	}
+
+	// Content negotiation (opt-in).
+	if e.cfg.Middleware.ContentNegotiation {
+		mw = append(mw, middleware.ContentNegotiation())
+	}
+
+	// Response caching (opt-in).
+	if e.cfg.Middleware.Cache.Enabled {
+		cacheOpts := []middleware.CacheOption{}
+		if e.cfg.Middleware.Cache.TTL > 0 {
+			cacheOpts = append(cacheOpts, middleware.WithCacheTTL(e.cfg.Middleware.Cache.TTL))
+		}
+		if e.cfg.Middleware.Cache.MaxEntries > 0 {
+			cacheOpts = append(cacheOpts, middleware.WithMaxCacheEntries(e.cfg.Middleware.Cache.MaxEntries))
+		}
+		mw = append(mw, middleware.Cache(cacheOpts...))
+		slog.Info("response cache middleware enabled")
+	}
+
+	// Policy enforcement (opt-in).
+	if e.cfg.Policy.Enabled && e.policyEval != nil {
+		policyOpts := []middleware.PolicyOption{}
+		if len(e.cfg.Policy.SkipPaths) > 0 {
+			policyOpts = append(policyOpts, middleware.WithSkipPaths(e.cfg.Policy.SkipPaths...))
+		}
+		mw = append(mw, middleware.Policy(e.policyEval, policyOpts...))
 	}
 
 	// Caller-supplied middleware is appended last (innermost after core).

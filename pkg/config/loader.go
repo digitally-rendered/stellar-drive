@@ -32,7 +32,7 @@ func loadYAML(path string, dst *StellarConfig) error {
 	if err != nil {
 		return fmt.Errorf("open: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	dec := yaml.NewDecoder(f)
 	dec.KnownFields(true)
@@ -196,5 +196,19 @@ func applyEnv(cfg *StellarConfig) {
 	}
 	if v := os.Getenv("STELLAR_POLICY_DIR"); v != "" {
 		cfg.Policy.Dir = v
+	}
+	if v := os.Getenv("STELLAR_POLICY_MODE"); v != "" {
+		cfg.Policy.Mode = v
+	}
+	if v := os.Getenv("STELLAR_POLICY_REMOTE_URL"); v != "" {
+		cfg.Policy.RemoteURL = v
+	}
+	if v := os.Getenv("STELLAR_POLICY_DEFAULT_POLICY"); v != "" {
+		cfg.Policy.DefaultPolicy = v
+	}
+	if v := os.Getenv("STELLAR_POLICY_TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			cfg.Policy.Timeout = d
+		}
 	}
 }

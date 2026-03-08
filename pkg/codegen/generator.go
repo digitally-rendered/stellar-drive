@@ -143,7 +143,7 @@ func sanitizePackageName(name string) string {
 			}
 		case c == '_':
 			b = append(b, c)
-		// drop everything else (hyphens, spaces, dots …)
+			// drop everything else (hyphens, spaces, dots …)
 		}
 	}
 	if len(b) == 0 {

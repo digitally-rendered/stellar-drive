@@ -85,9 +85,10 @@ func (b *Bus) Publish(ctx context.Context, evt *Event) error {
 	// Partition: globals first, then schema-specific matches.
 	var globals, specific []handlerEntry
 	for _, e := range snapshot {
-		if e.schemaName == "" {
+		switch e.schemaName {
+		case "":
 			globals = append(globals, e)
-		} else if e.schemaName == evt.SchemaName {
+		case evt.SchemaName:
 			specific = append(specific, e)
 		}
 	}

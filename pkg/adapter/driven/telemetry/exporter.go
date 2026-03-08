@@ -27,7 +27,7 @@ type jsonSnapshot struct {
 	Timestamp  string                   `json:"timestamp"`
 	Counters   map[string]int64         `json:"counters"`
 	Gauges     map[string]int64         `json:"gauges"`
-	Histograms map[string]jsonHistogram  `json:"histograms"`
+	Histograms map[string]jsonHistogram `json:"histograms"`
 }
 
 func toJSON(snap MetricsSnapshot) jsonSnapshot {

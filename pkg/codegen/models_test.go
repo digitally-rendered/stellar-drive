@@ -22,7 +22,7 @@ func sampleSchema() *schema.SchemaDefinition {
 		Version: "1.0.0",
 		Storage: "mongo",
 		Schema: map[string]any{
-			"type": "object",
+			"type":     "object",
 			"required": []any{"customer_id", "amount"},
 			"properties": map[string]any{
 				"customer_id": map[string]any{

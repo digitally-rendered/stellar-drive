@@ -3,12 +3,12 @@ package query
 // Query is the top-level structure representing a full query: filter, sort,
 // pagination, field projection, and cursor state.
 type Query struct {
-	Filter  *FilterNode `json:"filter,omitempty"`
-	Sort    []SortField `json:"sort,omitempty"`
-	Limit   int         `json:"limit,omitempty"`
-	Offset  int         `json:"offset,omitempty"`
-	Cursor  string      `json:"cursor,omitempty"`
-	Fields  []string    `json:"fields,omitempty"`
+	Filter *FilterNode `json:"filter,omitempty"`
+	Sort   []SortField `json:"sort,omitempty"`
+	Limit  int         `json:"limit,omitempty"`
+	Offset int         `json:"offset,omitempty"`
+	Cursor string      `json:"cursor,omitempty"`
+	Fields []string    `json:"fields,omitempty"`
 }
 
 // Operator is a named query operator token.

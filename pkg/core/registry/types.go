@@ -56,4 +56,10 @@ const (
 	OpUpdate Operation = "update"
 	// OpDelete identifies the delete (DELETE /:id) operation.
 	OpDelete Operation = "delete"
+	// OpBulkCreate identifies the bulk-create (POST /_bulk) operation.
+	OpBulkCreate Operation = "bulk_create"
+	// OpBulkUpdate identifies the bulk-update (PATCH /_bulk) operation.
+	OpBulkUpdate Operation = "bulk_update"
+	// OpBulkDelete identifies the bulk-delete (DELETE /_bulk) operation.
+	OpBulkDelete Operation = "bulk_delete"
 )

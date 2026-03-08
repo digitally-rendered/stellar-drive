@@ -1,9 +1,10 @@
-// Package sdk provides OpenAPI 3.1 spec generation from registered schemas.
+// Package sdk provides OpenAPI 3.0.3 spec generation from registered schemas.
 package sdk
 
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/digitally-rendered/stellar-drive/internal/stringutil"
@@ -12,10 +13,10 @@ import (
 
 // OpenAPISpec is the top-level OpenAPI 3.1 document.
 type OpenAPISpec struct {
-	OpenAPI    string                       `json:"openapi"`
-	Info       OpenAPIInfo                  `json:"info"`
-	Paths      map[string]OpenAPIPathItem   `json:"paths"`
-	Components OpenAPIComponents            `json:"components"`
+	OpenAPI    string                     `json:"openapi"`
+	Info       OpenAPIInfo                `json:"info"`
+	Paths      map[string]OpenAPIPathItem `json:"paths"`
+	Components OpenAPIComponents          `json:"components"`
 }
 
 // OpenAPIInfo holds metadata about the API.
@@ -29,26 +30,26 @@ type OpenAPIPathItem map[string]*OpenAPIOperation
 
 // OpenAPIOperation describes a single HTTP operation.
 type OpenAPIOperation struct {
-	Summary     string                      `json:"summary"`
-	OperationID string                      `json:"operationId"`
-	Tags        []string                    `json:"tags"`
-	Parameters  []OpenAPIParameter          `json:"parameters,omitempty"`
-	RequestBody *OpenAPIRequestBody         `json:"requestBody,omitempty"`
-	Responses   map[string]OpenAPIResponse  `json:"responses"`
+	Summary     string                     `json:"summary"`
+	OperationID string                     `json:"operationId"`
+	Tags        []string                   `json:"tags"`
+	Parameters  []OpenAPIParameter         `json:"parameters,omitempty"`
+	RequestBody *OpenAPIRequestBody        `json:"requestBody,omitempty"`
+	Responses   map[string]OpenAPIResponse `json:"responses"`
 }
 
 // OpenAPIParameter describes a path, query, or header parameter.
 type OpenAPIParameter struct {
-	Name     string         `json:"name"`
-	In       string         `json:"in"`
-	Required bool           `json:"required"`
-	Schema   OpenAPISchema  `json:"schema"`
+	Name     string        `json:"name"`
+	In       string        `json:"in"`
+	Required bool          `json:"required"`
+	Schema   OpenAPISchema `json:"schema"`
 }
 
 // OpenAPIRequestBody describes the body of a mutating request.
 type OpenAPIRequestBody struct {
-	Required bool                             `json:"required"`
-	Content  map[string]OpenAPIMediaType      `json:"content"`
+	Required bool                        `json:"required"`
+	Content  map[string]OpenAPIMediaType `json:"content"`
 }
 
 // OpenAPIMediaType wraps a schema for a specific media type.
@@ -80,11 +81,12 @@ type OpenAPISchema struct {
 	AdditionalProperties *OpenAPISchema           `json:"additionalProperties,omitempty"`
 }
 
-// GenerateOpenAPI builds an OpenAPI 3.1 spec from all schemas registered in r.
-// title is used as the API title; apiVersion is the spec version string.
+// GenerateOpenAPI builds an OpenAPI 3.0.3 spec from the latest version of all
+// schemas registered in r. title is the API title; apiVersion is the spec
+// version string (e.g. "1.0.0").
 func GenerateOpenAPI(r *schema.Registry, title, apiVersion string) (*OpenAPISpec, error) {
 	spec := &OpenAPISpec{
-		OpenAPI: "3.1.0",
+		OpenAPI: "3.0.3",
 		Info: OpenAPIInfo{
 			Title:   title,
 			Version: apiVersion,
@@ -99,6 +101,187 @@ func GenerateOpenAPI(r *schema.Registry, title, apiVersion string) (*OpenAPISpec
 		}
 	}
 	return spec, nil
+}
+
+// GenerateVersionedOpenAPI builds an OpenAPI 3.0.3 spec from ALL registered
+// schema versions.
+//
+// Component naming convention:
+//   - Non-latest version "1.0.0" of "pet" → PetV1_0_0, PetV1_0_0Create, …
+//   - Latest version also gets unversioned aliases: Pet, PetCreate, …
+//
+// Path naming convention:
+//   - Latest version gets standard paths: /pets, /pets/{entityId}
+//   - Non-latest gets versioned paths:    /pets@1.0.0, /pets@1.0.0/{entityId}
+//
+// All operations include an optional X-Schema-Version request header parameter.
+func GenerateVersionedOpenAPI(r *schema.Registry, title, apiVersion string) (*OpenAPISpec, error) {
+	spec := &OpenAPISpec{
+		OpenAPI: "3.0.3",
+		Info: OpenAPIInfo{
+			Title:   title,
+			Version: apiVersion,
+		},
+		Paths:      make(map[string]OpenAPIPathItem),
+		Components: OpenAPIComponents{Schemas: make(map[string]OpenAPISchema)},
+	}
+
+	// Group all definitions by name so we can identify the latest per name.
+	// r.ListAll() returns results sorted by name then version.
+	allDefs := r.ListAll()
+	byName := make(map[string][]*schema.SchemaDefinition)
+	for _, def := range allDefs {
+		byName[def.Name] = append(byName[def.Name], def)
+	}
+
+	// Collect names in deterministic order.
+	names := make([]string, 0, len(byName))
+	for name := range byName {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	// Determine the latest version per name using the registry's own ordering.
+	latestDefs := r.List() // one entry per name, already the latest version
+	latestVersion := make(map[string]string, len(latestDefs))
+	for _, def := range latestDefs {
+		latestVersion[def.Name] = def.Version
+	}
+
+	for _, name := range names {
+		defs := byName[name]
+		latest := latestVersion[name]
+
+		for _, def := range defs {
+			isLatest := def.Version == latest
+			if err := addVersionedSchemaToSpec(spec, def, isLatest); err != nil {
+				return nil, fmt.Errorf("openapi versioned: schema %q v%s: %w", def.Name, def.Version, err)
+			}
+		}
+	}
+
+	return spec, nil
+}
+
+// versionSuffix converts a semver string such as "1.0.0" into "V1_0_0".
+func versionSuffix(version string) string {
+	// Strip leading "v" if present.
+	v := strings.TrimPrefix(version, "v")
+	return "V" + strings.ReplaceAll(v, ".", "_")
+}
+
+// addVersionedSchemaToSpec adds component schemas and paths for one specific
+// version of a schema definition. When isLatest is true, unversioned aliases
+// and standard (undecorated) paths are also registered.
+func addVersionedSchemaToSpec(spec *OpenAPISpec, def *schema.SchemaDefinition, isLatest bool) error {
+	typePrefix := stringutil.ToPascalCase(def.Name)
+	vSuffix := versionSuffix(def.Version)
+	versionedPrefix := typePrefix + vSuffix // e.g. PetV1_0_0
+
+	basePath := "/" + strings.ToLower(stringutil.Pluralize(def.Name))
+	tag := typePrefix
+
+	// --- Component schemas (versioned) ---
+	spec.Components.Schemas[versionedPrefix] = buildDocumentSchema(def)
+	spec.Components.Schemas[versionedPrefix+"Create"] = buildCreateSchema(def)
+	spec.Components.Schemas[versionedPrefix+"Update"] = buildUpdateSchema(def)
+	spec.Components.Schemas[versionedPrefix+"ListResult"] = buildListResultSchema(versionedPrefix)
+
+	// Latest version also gets unversioned aliases pointing at the versioned schemas.
+	if isLatest {
+		spec.Components.Schemas[typePrefix] = OpenAPISchema{Ref: "#/components/schemas/" + versionedPrefix}
+		spec.Components.Schemas[typePrefix+"Create"] = OpenAPISchema{Ref: "#/components/schemas/" + versionedPrefix + "Create"}
+		spec.Components.Schemas[typePrefix+"Update"] = OpenAPISchema{Ref: "#/components/schemas/" + versionedPrefix + "Update"}
+		spec.Components.Schemas[typePrefix+"ListResult"] = OpenAPISchema{Ref: "#/components/schemas/" + versionedPrefix + "ListResult"}
+	}
+
+	schemaVersionHeader := OpenAPIParameter{
+		Name:     "X-Schema-Version",
+		In:       "header",
+		Required: false,
+		Schema:   OpenAPISchema{Type: "string"},
+	}
+
+	entityIDParam := OpenAPIParameter{
+		Name:     "entityId",
+		In:       "path",
+		Required: true,
+		Schema:   OpenAPISchema{Type: "string"},
+	}
+
+	// --- Paths ---
+	// Latest version uses the standard path. Non-latest uses a versioned path.
+	collectionPath := basePath
+	entityPath := basePath + "/{entityId}"
+	operationSuffix := "" // empty for latest
+
+	if !isLatest {
+		vTag := "@" + def.Version
+		collectionPath = basePath + vTag
+		entityPath = basePath + vTag + "/{entityId}"
+		operationSuffix = vSuffix // e.g. V1_0_0
+	}
+
+	collectionItem := OpenAPIPathItem{
+		"post": {
+			Summary:     "Create " + def.Name,
+			OperationID: "create" + typePrefix + operationSuffix,
+			Tags:        []string{tag},
+			Parameters:  []OpenAPIParameter{schemaVersionHeader},
+			RequestBody: jsonRequestBody(versionedPrefix + "Create"),
+			Responses: map[string]OpenAPIResponse{
+				"201": jsonResponse("Created "+versionedPrefix, versionedPrefix),
+				"400": errorResponse("Bad request"),
+			},
+		},
+		"get": {
+			Summary:     "List " + def.Name,
+			OperationID: "list" + typePrefix + operationSuffix,
+			Tags:        []string{tag},
+			Parameters:  append(paginationParameters(), schemaVersionHeader),
+			Responses: map[string]OpenAPIResponse{
+				"200": jsonResponse("Paginated "+versionedPrefix+" list", versionedPrefix+"ListResult"),
+			},
+		},
+	}
+	spec.Paths[collectionPath] = collectionItem
+
+	entityItem := OpenAPIPathItem{
+		"get": {
+			Summary:     "Get " + def.Name + " by ID",
+			OperationID: "get" + typePrefix + operationSuffix,
+			Tags:        []string{tag},
+			Parameters:  []OpenAPIParameter{entityIDParam, schemaVersionHeader},
+			Responses: map[string]OpenAPIResponse{
+				"200": jsonResponse(versionedPrefix+" document", versionedPrefix),
+				"404": errorResponse("Not found"),
+			},
+		},
+		"patch": {
+			Summary:     "Update " + def.Name,
+			OperationID: "update" + typePrefix + operationSuffix,
+			Tags:        []string{tag},
+			Parameters:  []OpenAPIParameter{entityIDParam, schemaVersionHeader},
+			RequestBody: jsonRequestBody(versionedPrefix + "Update"),
+			Responses: map[string]OpenAPIResponse{
+				"200": jsonResponse("Updated "+versionedPrefix, versionedPrefix),
+				"404": errorResponse("Not found"),
+			},
+		},
+		"delete": {
+			Summary:     "Delete " + def.Name,
+			OperationID: "delete" + typePrefix + operationSuffix,
+			Tags:        []string{tag},
+			Parameters:  []OpenAPIParameter{entityIDParam, schemaVersionHeader},
+			Responses: map[string]OpenAPIResponse{
+				"204": {Description: "No content"},
+				"404": errorResponse("Not found"),
+			},
+		},
+	}
+	spec.Paths[entityPath] = entityItem
+
+	return nil
 }
 
 // MarshalJSON returns the JSON bytes for the OpenAPI spec.

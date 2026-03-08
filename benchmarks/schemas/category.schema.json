@@ -1,0 +1,21 @@
+{
+  "name": "category",
+  "version": "1.0.0",
+  "description": "Pet category from OA3 Petstore benchmark",
+  "storage": "mongo",
+  "collection": "categories",
+  "schema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "required": ["name"],
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Category name"
+      }
+    }
+  },
+  "indexes": [
+    { "fields": ["name"], "unique": false }
+  ]
+}

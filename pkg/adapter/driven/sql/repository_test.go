@@ -25,7 +25,6 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
@@ -50,7 +49,7 @@ func init() {
 }
 
 // memDriver is the top-level driver.Driver implementation.
-type memDriver struct{ mu sync.Mutex }
+type memDriver struct{}
 
 // databases is a package-level registry of in-memory databases keyed by DSN.
 var (
@@ -175,7 +174,7 @@ type memStmt struct {
 	q    string
 }
 
-func (s *memStmt) Close() error { return nil }
+func (s *memStmt) Close() error  { return nil }
 func (s *memStmt) NumInput() int { return -1 }
 
 func (s *memStmt) Exec(args []driver.Value) (driver.Result, error) {
@@ -397,7 +396,7 @@ func execCount(db *memDatabase, q string, args []any) (driver.Rows, error) {
 	// Count the rows.
 	count := int64(0)
 	mr := rows.(*memRows)
-	for _, _ = range mr.rows {
+	for range mr.rows {
 		count++
 	}
 	return singleValueRows(count), nil
@@ -1200,13 +1199,3 @@ func TestSQLRepository_ImplementsInterface(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Marshalling helpers (used by tests only)
-// ---------------------------------------------------------------------------
-
-func mustMarshal(v any) string {
-	b, err := json.Marshal(v)
-	if err != nil {
-		panic(err)
-	}
-	return string(b)
-}
