@@ -30,6 +30,7 @@ import (
 	"github.com/digitally-rendered/stellar-drive/pkg/core/port"
 	"github.com/digitally-rendered/stellar-drive/pkg/core/registry"
 	"github.com/digitally-rendered/stellar-drive/pkg/core/schema"
+	"github.com/digitally-rendered/stellar-drive/pkg/core/schema/migration"
 	"github.com/digitally-rendered/stellar-drive/pkg/core/service"
 )
 
@@ -54,6 +55,8 @@ type Engine struct {
 	// Options applied at construction time.
 	schemaDir       string
 	extraMiddleware []func(http.Handler) http.Handler
+	extraRoutes     []func(chi.Router)
+	migrations      *migration.Registry
 }
 
 // New constructs an Engine from cfg and applies any functional options. The
@@ -124,8 +127,22 @@ func (e *Engine) Start(ctx context.Context) error {
 		slog.InfoContext(ctx, "schema hot-reload watcher started", "dir", e.schemaDir)
 	}
 
-	// 5. Create GenericCRUDService wired to the MongoDB repository.
-	svc := service.NewGenericCRUDService(repo, e.eventBus, e.registry)
+	// 5. Create GenericCRUDService wired to the repository. When a migration
+	// registry was supplied via WithMigrations, wrap the repository so every
+	// read-returning call applies the migration chain before returning.
+	var crudRepo port.Repository = repo
+	if e.migrations != nil {
+		currentVer := func(schemaName string) string {
+			def, err := e.registry.Get(schemaName, "")
+			if err != nil {
+				return ""
+			}
+			return def.Version
+		}
+		crudRepo = migration.NewRepository(repo, e.migrations, currentVer)
+		slog.InfoContext(ctx, "schema-version migrations enabled")
+	}
+	svc := service.NewGenericCRUDService(crudRepo, e.eventBus, e.registry)
 
 	// 5a. Optionally wire the audit trail.
 	var auditStore *mongoadapter.MongoAuditStore
@@ -140,9 +157,10 @@ func (e *Engine) Start(ctx context.Context) error {
 		slog.InfoContext(ctx, "audit trail enabled", "collection", e.cfg.Audit.Collection)
 	}
 
-	// 6. Build the DI container with defaults.
+	// 6. Build the DI container with defaults. crudRepo is either the raw
+	// mongo repository or the migration-wrapped decorator from step 5.
 	e.ctr = container.New(
-		container.WithDefaultRepository(repo),
+		container.WithDefaultRepository(crudRepo),
 		container.WithDefaultService(svc),
 		container.WithEventBus(e.eventBus),
 	)
@@ -165,6 +183,17 @@ func (e *Engine) Start(ctx context.Context) error {
 	apiPrefix := e.cfg.Server.APIPrefix
 	dataRouter := rest.NewRouter(apiPrefix, e.registry, e.ctr, e.schemaStore, e.funcReg)
 	e.router = chi.NewRouter()
+
+	// 8-pre. Caller-supplied routes are mounted under the API prefix before the
+	// schema-driven data router. They share the built-in middleware stack.
+	if len(e.extraRoutes) > 0 {
+		customRouter := chi.NewRouter()
+		for _, register := range e.extraRoutes {
+			register(customRouter)
+		}
+		e.router.Mount(apiPrefix, middleware.Chain(mwStack...)(customRouter))
+	}
+
 	e.router.Mount("/", middleware.Chain(mwStack...)(dataRouter))
 
 	// 8a. Register health and readiness probes outside the middleware chain.

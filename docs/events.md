@@ -298,6 +298,41 @@ func setup(bus *event.Bus) {
 }
 ```
 
+## Ordering and Concurrency Guarantees
+
+Event semantics are narrow on purpose. Read this before building anything that depends on "event B arrives after event A."
+
+### Per-operation ordering (guaranteed)
+
+Within a single CRUD call, the bus dispatches in this order:
+
+1. Every matching `SubscribeAll` handler, in registration order.
+2. Every handler registered for the specific `(eventType, schemaName)` pair, in registration order.
+3. Handlers registered for the specific event type with `schemaName = ""` (global), in registration order.
+
+Pre-events are fully synchronous — the service awaits each handler and the first error aborts both the remaining pre-handlers and the operation. Post-events are also synchronous, but handler errors are logged, not propagated.
+
+### Cross-operation ordering (**not** guaranteed)
+
+Two requests arriving concurrently hit the bus concurrently. `pet.post_create` for request A and `pet.post_update` for request B can interleave in any order. The framework does not serialise operations per entity, per schema, or globally.
+
+If you need causal ordering across requests (e.g., "a `post_update` for entity X must not be processed before its `post_create`"), you must build that into your handler: buffer by `EntityID`, use a message queue downstream, or gate on record version.
+
+### Mutation semantics
+
+`Event.Input` and `Event.Metadata` are the raw maps passed by the service layer. Pre-event handlers can mutate these maps and the mutation is visible to later handlers and to the repository call that follows. This is the intended mechanism for data enrichment (see the enrichment example below). Post-event handlers can mutate `Event.Result` but by then the repository has already persisted the document, so mutations affect only the response path.
+
+Two handlers running back-to-back within a single operation see each other's writes deterministically. Two handlers running in different operations do not share state through the event unless you put it there.
+
+### Failure behaviour
+
+| Event phase | Handler returns error | Effect |
+|---|---|---|
+| Pre | non-nil | Operation aborts, error propagates to caller, remaining pre-handlers skipped, post-event does **not** fire |
+| Post | non-nil | Logged, remaining post-handlers still run, caller sees success |
+
+This asymmetry is load-bearing: post-events are for side-effects (metrics, webhooks, cache invalidation) that must not be able to fail the write after the database has already accepted it.
+
 ## Integration with Services
 
 The `GenericCRUDService` in `pkg/core/service/` fires events automatically during its operation lifecycle. You do not need to publish events manually when using the service layer. The service:
