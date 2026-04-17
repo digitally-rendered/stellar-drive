@@ -2,6 +2,19 @@
 
 Stellar-Drive supports managing schemas at runtime without server restarts. You can add, update, and remove schemas via the REST API, and the framework automatically generates CRUD endpoints, GraphQL types, and storage collections on the fly.
 
+## Typed vs. Dynamic — pick deliberately
+
+Schemas reach the server from two different pipelines, and the developer experience on the Go side is very different. **Know which path you're on.**
+
+| Path | Typed Go? | Best for |
+|---|---|---|
+| File on disk + `stellar generate` | Yes — `<Type>Document`, `<Type>Create`, `<Type>Update`, `<Type>Repository`, `<Type>Service`, `<Type>Handler` | Known-at-compile-time domains, IDE autocomplete, compile-time safety, override hooks via `stellar generate --overrides` |
+| `POST /_schemas` at runtime | **No** — reads/writes are `map[string]any` wrapped in generic `model.Document` | Tenant-defined schemas, user-supplied extensions, late-bound data shapes |
+
+Dynamic schemas get you working REST + GraphQL endpoints immediately, but there is no typed Go surface: every consumer works with `*model.Document` and `map[string]any`. If you switch a schema from file-based to runtime-registered you lose the generated wrappers until you run `stellar generate` again against a snapshot of the envelope.
+
+**Recommended rule of thumb**: ship the core of your product as file-based schemas (so your codebase stays type-checked) and reserve dynamic registration for genuinely user-defined extensions.
+
 ## Runtime Schema Registration
 
 ### Register a New Schema

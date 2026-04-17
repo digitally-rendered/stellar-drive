@@ -152,15 +152,27 @@ middleware:
     burst: 50
 `
 
-const mainGoTemplate = `package main
+const mainGoTemplate = `// Package main is the entry point for the {{.ProjectName}} service.
+//
+// The default main boots the stellar-drive engine with the configuration in
+// stellar.yaml and the schemas under ./schemas. Every extension point is
+// reachable through engine.Option values — no need to fork stellar-drive to
+// add guards, validators, custom endpoints, or event handlers.
+//
+// Uncomment the blocks below as you grow the service.
+package main
 
 import (
+	"context"
 	"log/slog"
 	"os"
 
 	"github.com/digitally-rendered/stellar-drive/pkg/config"
 	"github.com/digitally-rendered/stellar-drive/pkg/engine"
-	"context"
+	// Extension-point imports — uncomment as needed.
+	// "net/http"
+	// "github.com/digitally-rendered/stellar-drive/pkg/core/event"
+	// "github.com/digitally-rendered/stellar-drive/pkg/core/registry"
 )
 
 func main() {
@@ -170,7 +182,58 @@ func main() {
 		os.Exit(1)
 	}
 
-	eng := engine.New(cfg)
+	opts := []engine.Option{
+		// --- Custom handlers, guards, validators, transforms ------------------
+		// funcReg := registry.NewFunctionRegistry()
+		//
+		// // Guard: deny delete unless caller has the "admin" role header.
+		// funcReg.RegisterGuard("pet", registry.OpDelete, registry.Scope{},
+		//     func(ctx context.Context, r *http.Request) error {
+		//         if r.Header.Get("X-Role") != "admin" {
+		//             return fmt.Errorf("admin only")
+		//         }
+		//         return nil
+		//     })
+		//
+		// // Validator: reject empty names before they hit the repository.
+		// funcReg.RegisterValidator("pet", registry.OpCreate, registry.Scope{},
+		//     func(ctx context.Context, schemaName string, data map[string]any) error {
+		//         if s, _ := data["name"].(string); s == "" {
+		//             return fmt.Errorf("name is required")
+		//         }
+		//         return nil
+		//     })
+		//
+		// // Transform: normalise input before persistence.
+		// funcReg.RegisterTransform("pet", registry.OpCreate, registry.Scope{},
+		//     func(ctx context.Context, schemaName string, data map[string]any) (map[string]any, error) {
+		//         if s, ok := data["name"].(string); ok {
+		//             data["name"] = strings.TrimSpace(s)
+		//         }
+		//         return data, nil
+		//     })
+		//
+		// // Handler override: replace the default list endpoint entirely.
+		// funcReg.RegisterHandler("pet", registry.OpList, registry.Scope{}, myCustomListHandler)
+		//
+		// opts = append(opts, engine.WithFunctionRegistry(funcReg))
+
+		// --- Event subscriptions ---------------------------------------------
+		// bus := event.NewBus()
+		// bus.Subscribe("pet.created", func(ctx context.Context, e event.Event) error {
+		//     slog.Info("pet created", "entity_id", e.EntityID)
+		//     return nil
+		// })
+		// opts = append(opts, engine.WithEventBus(bus))
+
+		// --- Custom middleware (runs after built-in stack) -------------------
+		// opts = append(opts, engine.WithMiddleware(myMetricsMiddleware))
+
+		// --- Custom policy evaluator (inject OPA client, etc.) ---------------
+		// opts = append(opts, engine.WithPolicyEvaluator(myPolicyEvaluator))
+	}
+
+	eng := engine.New(cfg, opts...)
 	if err := eng.Start(context.Background()); err != nil {
 		slog.Error("engine stopped with error", "error", err)
 		os.Exit(1)

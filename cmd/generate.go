@@ -14,8 +14,9 @@ import (
 )
 
 var (
-	generateOutput  string
-	generateSchemas string
+	generateOutput    string
+	generateSchemas   string
+	generateOverrides bool
 )
 
 var generateCmd = &cobra.Command{
@@ -45,6 +46,12 @@ func init() {
 		"schemas",
 		"Directory containing *.schema.json files",
 	)
+	generateCmd.Flags().BoolVar(
+		&generateOverrides,
+		"overrides",
+		false,
+		"Also emit per-schema <name>_overrides.go stubs with empty guards, validators, transforms, and handler hooks. Existing files are preserved.",
+	)
 	rootCmd.AddCommand(generateCmd)
 }
 
@@ -68,6 +75,13 @@ func runGenerate(_ *cobra.Command, _ []string) error {
 	gen := codegen.NewGenerator(reg, generateOutput, modulePath)
 	if err := gen.Generate(); err != nil {
 		return fmt.Errorf("generate: %w", err)
+	}
+
+	if generateOverrides {
+		if err := gen.WriteOverridesIfAbsent(); err != nil {
+			return fmt.Errorf("generate: overrides: %w", err)
+		}
+		fmt.Printf("Overrides stubs written (existing files preserved).\n")
 	}
 
 	// Generate the combined OpenAPI spec.

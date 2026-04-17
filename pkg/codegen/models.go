@@ -38,11 +38,28 @@ const (
 {{ end }}{{ end }}
 
 // ---------------------------------------------------------------------------
-// Document variant – full persisted document including audit fields
+// Domain variant – pure user-facing shape, no storage/audit fields
+// ---------------------------------------------------------------------------
+
+// {{ .TypePrefix }} is the pure domain shape of a {{ .SchemaName }} record,
+// carrying only fields declared in the schema. Use this type in service-layer
+// code and business logic that should not couple to persistence concerns.
+//
+// The envelope type {{ .TypePrefix }}Document wraps this shape with audit
+// fields (ID, record_version, timestamps, etag, etc). Convert between the two
+// via ({{ .TypePrefix }}Document).Domain().
+type {{ .TypePrefix }} struct {
+{{ range .Fields }}	{{ pascal .Name }} {{ fieldGoType $.TypePrefix . false }} {{ jsonTag .Name .Required false }}
+{{ end }}}
+
+// ---------------------------------------------------------------------------
+// Document (envelope) variant – persisted document including audit fields
 // ---------------------------------------------------------------------------
 
 // {{ .TypePrefix }}Document is the fully persisted representation of a
-// {{ .SchemaName }} record, including all generated audit fields.
+// {{ .SchemaName }} record: the domain shape plus every generated audit field.
+// Read paths return *{{ .TypePrefix }}Document; domain code typically works
+// with the embedded {{ .TypePrefix }} via (*{{ .TypePrefix }}Document).Domain().
 type {{ .TypePrefix }}Document struct {
 	ID            string     ` + "`" + `json:"id"` + "`" + `
 	EntityID      string     ` + "`" + `json:"entity_id"` + "`" + `
@@ -58,6 +75,18 @@ type {{ .TypePrefix }}Document struct {
 	DeletedBy     string     ` + "`" + `json:"deleted_by,omitempty"` + "`" + `
 {{ range .Fields }}	{{ pascal .Name }} {{ fieldGoType $.TypePrefix . false }} {{ jsonTag .Name .Required false }}
 {{ end }}}
+
+// Domain returns the pure domain shape of this {{ .SchemaName }} record,
+// stripped of every audit field. Use this when passing data into code that
+// should not know about storage.
+func (d *{{ .TypePrefix }}Document) Domain() *{{ .TypePrefix }} {
+	if d == nil {
+		return nil
+	}
+	return &{{ .TypePrefix }}{
+{{ range .Fields }}		{{ pascal .Name }}: d.{{ pascal .Name }},
+{{ end }}	}
+}
 
 // ---------------------------------------------------------------------------
 // Create variant – fields accepted on creation (no audit fields)

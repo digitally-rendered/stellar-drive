@@ -3,9 +3,12 @@ package engine
 import (
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/digitally-rendered/stellar-drive/pkg/core/event"
 	"github.com/digitally-rendered/stellar-drive/pkg/core/port"
 	"github.com/digitally-rendered/stellar-drive/pkg/core/registry"
+	"github.com/digitally-rendered/stellar-drive/pkg/core/schema/migration"
 )
 
 // Option is a functional option that configures an Engine before it starts.
@@ -54,5 +57,36 @@ func WithFunctionRegistry(reg *registry.FunctionRegistry) Option {
 func WithPolicyEvaluator(eval port.PolicyEvaluator) Option {
 	return func(e *Engine) {
 		e.policyEval = eval
+	}
+}
+
+// WithMigrations installs a read-time schema-version migration registry. Every
+// document returned from the repository is migrated from its persisted
+// SchemaVersion up to the current version reported by the engine's schema
+// registry. Writes are unaffected — documents are always written at the
+// current schema version.
+//
+// Passing a nil registry is a no-op; this keeps WithMigrations safe to include
+// unconditionally in wiring code.
+func WithMigrations(reg *migration.Registry) Option {
+	return func(e *Engine) {
+		e.migrations = reg
+	}
+}
+
+// WithRoutes registers caller-supplied HTTP routes that are mounted under the
+// configured API prefix and share the built-in middleware stack. Routes are
+// added before the schema-driven CRUD routes so custom paths cannot be shadowed
+// by generic collection handlers.
+//
+// Use this for non-CRUD endpoints such as webhooks, search, reports, or
+// aggregations. Multiple calls to WithRoutes are cumulative; each registration
+// function runs against the same router.
+func WithRoutes(register func(chi.Router)) Option {
+	return func(e *Engine) {
+		if register == nil {
+			return
+		}
+		e.extraRoutes = append(e.extraRoutes, register)
 	}
 }

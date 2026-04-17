@@ -1,0 +1,21 @@
+{
+  "name": "tag",
+  "version": "1.0.0",
+  "description": "Tag for pets from OA3 Petstore",
+  "storage": "mongo",
+  "collection": "tags",
+  "schema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "required": ["name"],
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Tag name"
+      }
+    }
+  },
+  "indexes": [
+    { "fields": ["name"], "unique": true }
+  ]
+}
